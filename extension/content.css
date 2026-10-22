@@ -1,0 +1,649 @@
+/* StudyTube — Content Styles */
+
+/* 1. Recommendation Blackout Overlays */
+.studytube-blacked-out {
+  position: relative !important;
+  min-height: 120px !important;
+  isolation: isolate !important;
+  z-index: 0 !important;
+  overflow: hidden !important;
+  border-radius: 12px !important;
+}
+
+.studytube-blacked-out > *:not(.studytube-cover) {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+.studytube-blacked-out .studytube-hide-target {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+
+.studytube-cover {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 2 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  background: #090a0f !important;
+  color: #f3f4f6 !important;
+  border-radius: 12px !important;
+  padding: 16px !important;
+  box-sizing: border-box !important;
+  cursor: pointer !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  border: 1px solid #27272a !important;
+  transition: background-color 0.2s, border-color 0.2s !important;
+  text-align: center !important;
+  overflow: hidden !important;
+}
+
+.studytube-cover:hover {
+  background: #12131a !important;
+  border-color: #3b82f6 !important;
+}
+
+/* Ensure YouTube sticky navigation and filter chip bar stay above scrolling feed cards */
+#masthead-container,
+ytd-masthead,
+#chips-wrapper,
+ytd-feed-filter-chip-bar-renderer,
+#header.ytd-rich-grid-renderer,
+iron-selector#chips,
+yt-page-header-renderer {
+  z-index: 2028 !important;
+}
+
+#chips-wrapper,
+ytd-feed-filter-chip-bar-renderer {
+  background: var(--yt-spec-base-background, #0f0f0f) !important;
+}
+
+.studytube-cover-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.5px !important;
+  padding: 4px 10px !important;
+  background: rgba(239, 68, 68, 0.15) !important;
+  color: #f87171 !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  border-radius: 6px !important;
+}
+
+.studytube-cover.is-pending {
+  background: #090d16 !important;
+  border-color: rgba(56, 189, 248, 0.25) !important;
+  cursor: wait !important;
+}
+
+.studytube-cover-badge.is-pending-badge {
+  background: rgba(56, 189, 248, 0.15) !important;
+  color: #38bdf8 !important;
+  border-color: rgba(56, 189, 248, 0.35) !important;
+}
+
+.studytube-pending-spinner {
+  width: 20px !important;
+  height: 20px !important;
+  border: 2px solid rgba(56, 189, 248, 0.2) !important;
+  border-top-color: #38bdf8 !important;
+  border-radius: 50% !important;
+  animation: studytube-spin 0.75s linear infinite !important;
+  margin-bottom: 2px !important;
+}
+
+@keyframes studytube-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.studytube-cover-subtext {
+  font-size: 11px !important;
+  color: #94a3b8 !important;
+  line-height: 1.3 !important;
+}
+
+.studytube-cover-title {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  color: #e5e7eb !important;
+  line-height: 1.3 !important;
+}
+
+.studytube-cover-action {
+  font-size: 11px !important;
+  color: #9ca3af !important;
+  border: 1px dashed #4b5563 !important;
+  border-radius: 6px !important;
+  padding: 4px 8px !important;
+  margin-top: 4px !important;
+  background: #181920 !important;
+}
+
+/* 1b. Whitelisted Video Thumbnail Category Tag */
+.studytube-thumbnail-tag {
+  position: absolute !important;
+  top: 6px !important;
+  right: 6px !important;
+  z-index: 25 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  background: rgba(15, 23, 42, 0.88) !important;
+  color: #38bdf8 !important;
+  border: 1px solid rgba(56, 189, 248, 0.45) !important;
+  border-radius: 4px !important;
+  padding: 2px 7px !important;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.2px !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5) !important;
+  backdrop-filter: blur(6px) !important;
+  -webkit-backdrop-filter: blur(6px) !important;
+  pointer-events: none !important;
+  line-height: 1.3 !important;
+}
+
+/* 2. In-Player Grayscale Enforcement (Watch & Shorts) */
+html.studytube-video-grayscale video,
+body.studytube-video-grayscale video,
+.studytube-video-grayscale video,
+.studytube-video-grayscale .html5-main-video,
+.studytube-video-grayscale .html5-video-player video,
+.studytube-video-grayscale ytd-shorts video,
+.studytube-video-grayscale ytd-reel-video-renderer video,
+.studytube-video-grayscale #shorts-player video,
+.studytube-video-grayscale #shorts-container video,
+.studytube-video-grayscale ytd-reel-player-overlay-renderer video,
+.studytube-video-grayscale .ytp-ce-element,
+.studytube-video-grayscale .ytp-ce-thumb,
+.studytube-video-grayscale .ytp-ce-thumb-image,
+.studytube-video-grayscale .ytp-ce-expanding-overlay,
+.studytube-video-grayscale .ytp-endscreen-content,
+.studytube-video-grayscale .ytp-videowall-still,
+.studytube-video-grayscale .ytp-videowall-still-image,
+.studytube-video-grayscale .ytp-autonav-endscreen-countdown-container,
+.studytube-video-grayscale .ytp-autonav-endscreen-button-container,
+.studytube-video-grayscale .ytp-upnext,
+.studytube-video-grayscale .ytp-pause-overlay,
+.studytube-video-grayscale .ytp-pause-overlay-container,
+.studytube-video-grayscale .ytp-cards-teaser,
+.studytube-video-grayscale .ytp-cards-teaser-box,
+.studytube-video-grayscale .ytp-iv-video-content {
+  filter: grayscale(1) !important;
+}
+
+/* 3. Color Mode Manual Toggle Button (Native YouTube Action Bar UI) */
+.studytube-color-toggle {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  padding: 0 16px 0 12px !important;
+  border-radius: 18px !important;
+  border: none !important;
+  outline: none !important;
+  font-family: "Roboto", "YouTube Sans", -apple-system, BlinkMacSystemFont, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  vertical-align: middle !important;
+  margin-left: 8px !important;
+  margin-right: 0 !important;
+  box-sizing: border-box !important;
+  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1)) !important;
+  color: var(--yt-spec-text-primary, #f1f1f1) !important;
+  transition: background-color 0.15s ease, transform 0.1s ease !important;
+}
+
+html[dark] .studytube-color-toggle,
+[dark] .studytube-color-toggle {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #f1f1f1 !important;
+}
+
+html:not([dark]) .studytube-color-toggle {
+  background-color: rgba(0, 0, 0, 0.05) !important;
+  color: #0f0f0f !important;
+}
+
+.studytube-color-toggle:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+html:not([dark]) .studytube-color-toggle:hover {
+  background-color: rgba(0, 0, 0, 0.1) !important;
+}
+
+.studytube-color-toggle:active {
+  transform: scale(0.97) !important;
+}
+
+.studytube-color-toggle.is-colored {
+  background-color: rgba(99, 102, 241, 0.2) !important;
+  color: #818cf8 !important;
+  border: 1px solid rgba(99, 102, 241, 0.4) !important;
+}
+
+.studytube-color-toggle .studytube-btn-icon {
+  width: 20px !important;
+  height: 20px !important;
+  display: block !important;
+  flex-shrink: 0 !important;
+}
+
+.studytube-color-toggle .studytube-btn-label {
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  letter-spacing: normal !important;
+}
+
+.studytube-color-toggle * {
+  pointer-events: none !important;
+}
+
+/* Ensure Shorts action bar overflow does not clip the top Color button */
+reel-action-bar-view-model,
+.ytwReelActionBarViewModelHost,
+.ytwReelsPlayerOverlayLayoutViewModelHostActionBar,
+[class*="ReelActionBarViewModelHost"],
+[class*="ReelsPlayerOverlayLayoutViewModelHostActionBar"],
+#actions,
+[id="actions"],
+ytd-reel-player-overlay-renderer,
+ytd-reel-player-overlay-renderer > *,
+ytd-reel-player-overlay-renderer #actions,
+ytd-shorts #actions,
+ytd-reel-video-renderer #actions,
+ytd-reel-video-renderer #overlay {
+  overflow: visible !important;
+}
+
+/* 3b. Shorts Color Mode Manual Toggle Button (Positioned directly above Like button) */
+.studytube-shorts-color-toggle-container {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  margin-bottom: 16px !important;
+  position: relative !important;
+  z-index: 99 !important;
+  min-width: 48px !important;
+  min-height: 48px !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.studytube-shorts-color-btn {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 4px !important;
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  cursor: pointer !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  user-select: none !important;
+  transition: transform 0.15s ease !important;
+}
+
+.studytube-shorts-color-btn:active {
+  transform: scale(0.92) !important;
+}
+
+.studytube-shorts-btn-circle {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 50% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background-color: var(--yt-spec-badge-chip-background, rgba(255, 255, 255, 0.1)) !important;
+  color: var(--yt-spec-text-primary, #f1f1f1) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  transition: background-color 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.studytube-shorts-color-btn:hover .studytube-shorts-btn-circle {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+}
+
+.studytube-shorts-color-btn.is-colored .studytube-shorts-btn-circle {
+  background-color: rgba(99, 102, 241, 0.25) !important;
+  color: #818cf8 !important;
+  border: 1.5px solid #6366f1 !important;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4) !important;
+}
+
+.studytube-shorts-btn-text {
+  font-family: "Roboto", -apple-system, BlinkMacSystemFont, sans-serif !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: var(--yt-spec-text-primary, #f1f1f1) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9) !important;
+  line-height: 1.2 !important;
+}
+
+.studytube-shorts-color-btn.is-colored .studytube-shorts-btn-text {
+  color: #818cf8 !important;
+}
+
+.studytube-shorts-color-btn * {
+  pointer-events: none !important;
+}
+
+/* Category Badge in Watch Header */
+.studytube-category-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  margin: 8px 6px 8px 0 !important;
+  padding: 6px 12px !important;
+  border-radius: 14px !important;
+  background: rgba(59, 130, 246, 0.12) !important;
+  border: 1px solid rgba(59, 130, 246, 0.3) !important;
+  color: #93c5fd !important;
+  font: 600 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+  vertical-align: middle !important;
+}
+
+/* 4. Live Chat Shield */
+html.studytube-hide-chat #chat,
+html.studytube-hide-chat #chat-container,
+html.studytube-hide-chat ytd-live-chat-frame,
+body.studytube-hide-chat #chat,
+body.studytube-hide-chat #chat-container,
+body.studytube-hide-chat ytd-live-chat-frame {
+  display: none !important;
+}
+
+/* 5. Complete Shorts Blocker Styles */
+html.studytube-block-shorts ytd-rich-shelf-renderer[is-shorts],
+html.studytube-block-shorts ytd-reel-shelf-renderer,
+body.studytube-block-shorts ytd-rich-shelf-renderer[is-shorts],
+body.studytube-block-shorts ytd-reel-shelf-renderer {
+  display: none !important;
+}
+
+.studytube-shorts-full-blocker {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 2147483647 !important;
+  background: #090a0f !important;
+  color: #f3f4f6 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  text-align: center !important;
+  padding: 24px !important;
+}
+
+.studytube-shorts-blocker-content {
+  max-width: 480px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 16px !important;
+}
+
+.studytube-shorts-blocker-icon {
+  font-size: 56px !important;
+  line-height: 1 !important;
+}
+
+.studytube-shorts-blocker-content h2 {
+  font-size: 22px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  margin: 0 !important;
+}
+
+.studytube-shorts-blocker-content p {
+  font-size: 14px !important;
+  color: #9ca3af !important;
+  line-height: 1.5 !important;
+  margin: 0 !important;
+}
+
+.studytube-leave-shorts-btn {
+  margin-top: 8px !important;
+  padding: 10px 22px !important;
+  background: #3b82f6 !important;
+  color: #ffffff !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  border: none !important;
+  border-radius: 20px !important;
+  cursor: pointer !important;
+  transition: background-color 0.2s !important;
+}
+
+.studytube-leave-shorts-btn:hover {
+  background: #2563eb !important;
+}
+
+/* 5b. Remove Shorts Navigation Scroll Arrows */
+#navigation-button-down,
+#navigation-button-up,
+.navigation-button,
+ytd-shorts #navigation-button-down,
+ytd-shorts #navigation-button-up,
+ytd-shorts yt-icon-button#navigation-button-down,
+ytd-shorts yt-icon-button#navigation-button-up,
+ytd-shorts [id*="navigation-button"],
+body ytd-shorts [id*="navigation-button"],
+ytd-shorts [aria-label*="Next video" i],
+ytd-shorts [aria-label*="Previous video" i],
+ytd-shorts [aria-label*="Next" i]:has(svg),
+ytd-shorts [aria-label*="Previous" i]:has(svg) {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: absolute !important;
+  left: -9999px !important;
+}
+
+/* 6. Comments Section Shield (Watch & Shorts) */
+.studytube-comments-collapsed > *:not(.studytube-comments-placeholder),
+.studytube-comments-collapsed #header,
+.studytube-comments-collapsed #sections,
+.studytube-comments-collapsed #contents,
+.studytube-comments-collapsed ytd-item-section-renderer,
+.studytube-comments-collapsed ytd-comments-header-renderer,
+html.studytube-hide-comments #comments > *:not(.studytube-comments-placeholder),
+body.studytube-hide-comments #comments > *:not(.studytube-comments-placeholder),
+/* Shorts Comments Shield: hide the entire action item slot and count label (Wiz + Polymer) */
+html.studytube-hide-comments reel-action-bar-view-model > *:has([aria-label*="comment" i]),
+body.studytube-hide-comments reel-action-bar-view-model > *:has([aria-label*="comment" i]),
+html.studytube-hide-comments reel-action-bar-view-model > *:has([id*="comment"]),
+body.studytube-hide-comments reel-action-bar-view-model > *:has([id*="comment"]),
+html.studytube-hide-comments [class*="ReelActionBarViewModelHost"] > *:has([aria-label*="comment" i]),
+body.studytube-hide-comments [class*="ReelActionBarViewModelHost"] > *:has([aria-label*="comment" i]),
+html.studytube-hide-comments [class*="ReelActionBarViewModelHost"] > *:has([id*="comment"]),
+body.studytube-hide-comments [class*="ReelActionBarViewModelHost"] > *:has([id*="comment"]),
+html.studytube-hide-comments ytd-shorts #actions > *:has([aria-label*="comment" i]),
+body.studytube-hide-comments ytd-shorts #actions > *:has([aria-label*="comment" i]),
+html.studytube-hide-comments ytd-shorts [id="actions"] > *:has([aria-label*="comment" i]),
+body.studytube-hide-comments ytd-shorts [id="actions"] > *:has([aria-label*="comment" i]),
+html.studytube-hide-comments ytd-shorts #actions > *:has(#comments-button),
+body.studytube-hide-comments ytd-shorts #actions > *:has(#comments-button),
+html.studytube-hide-comments ytd-shorts [id="actions"] > *:has(#comments-button),
+body.studytube-hide-comments ytd-shorts [id="actions"] > *:has(#comments-button),
+html.studytube-hide-comments ytd-reel-player-overlay-renderer #actions > *:has([aria-label*="comment" i]),
+body.studytube-hide-comments ytd-reel-player-overlay-renderer #actions > *:has([aria-label*="comment" i]),
+html.studytube-hide-comments ytd-reel-player-overlay-renderer #actions > *:has(#comments-button),
+body.studytube-hide-comments ytd-reel-player-overlay-renderer #actions > *:has(#comments-button),
+html.studytube-hide-comments ytd-shorts ytd-button-renderer:has(#comments-button),
+body.studytube-hide-comments ytd-shorts ytd-button-renderer:has(#comments-button),
+html.studytube-hide-comments ytd-shorts ytd-button-renderer:has([aria-label*="comment" i]),
+body.studytube-hide-comments ytd-shorts ytd-button-renderer:has([aria-label*="comment" i]),
+html.studytube-hide-comments ytd-shorts button-view-model:has(#comments-button),
+body.studytube-hide-comments ytd-shorts button-view-model:has(#comments-button),
+html.studytube-hide-comments ytd-shorts button-view-model:has([aria-label*="comment" i]),
+body.studytube-hide-comments ytd-shorts button-view-model:has([aria-label*="comment" i]),
+html.studytube-hide-comments ytd-shorts yt-button-shape:has(#comments-button),
+body.studytube-hide-comments ytd-shorts yt-button-shape:has(#comments-button),
+html.studytube-hide-comments ytd-shorts yt-button-shape:has([aria-label*="comment" i]),
+body.studytube-hide-comments ytd-shorts yt-button-shape:has([aria-label*="comment" i]),
+html.studytube-hide-comments ytd-shorts #comments-button,
+body.studytube-hide-comments ytd-shorts #comments-button,
+html.studytube-hide-comments ytd-shorts #comments-button + *,
+body.studytube-hide-comments ytd-shorts #comments-button + *,
+html.studytube-hide-comments ytd-reel-player-overlay-renderer #comments-button,
+body.studytube-hide-comments ytd-reel-player-overlay-renderer #comments-button,
+html.studytube-hide-comments ytd-reel-video-renderer #comments-button,
+body.studytube-hide-comments ytd-reel-video-renderer #comments-button,
+html.studytube-hide-comments #shorts-panel-container,
+body.studytube-hide-comments #shorts-panel-container,
+html.studytube-hide-comments ytd-shorts #shorts-panel-container,
+body.studytube-hide-comments ytd-shorts #shorts-panel-container,
+html.studytube-hide-comments ytd-shorts ytd-engagement-panel-section-list-renderer[target-id*="comment"],
+body.studytube-hide-comments ytd-shorts ytd-engagement-panel-section-list-renderer[target-id*="comment"],
+html.studytube-hide-comments ytd-shorts ytd-comments,
+body.studytube-hide-comments ytd-shorts ytd-comments {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.studytube-comments-placeholder {
+  margin: 16px 0 24px 0 !important;
+  padding: 16px 20px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px dashed rgba(255, 255, 255, 0.16) !important;
+  border-radius: 14px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  box-sizing: border-box !important;
+  transition: all 0.2s ease !important;
+}
+
+html:not([dark]) .studytube-comments-placeholder {
+  background: rgba(0, 0, 0, 0.03) !important;
+  border-color: rgba(0, 0, 0, 0.15) !important;
+}
+
+.studytube-comments-placeholder:hover {
+  border-color: rgba(99, 102, 241, 0.5) !important;
+  background: rgba(99, 102, 241, 0.06) !important;
+}
+
+.studytube-comments-info {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.studytube-comments-icon {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 10px !important;
+  background: rgba(99, 102, 241, 0.16) !important;
+  color: #818cf8 !important;
+  flex-shrink: 0 !important;
+}
+
+.studytube-comments-texts {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 3px !important;
+}
+
+.studytube-comments-title {
+  font-family: "Roboto", sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: var(--yt-spec-text-primary, #f1f1f1) !important;
+}
+
+.studytube-comments-subtitle {
+  font-family: "Roboto", sans-serif !important;
+  font-size: 12px !important;
+  color: var(--yt-spec-text-secondary, #aaaaaa) !important;
+}
+
+.studytube-comments-toggle-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  height: 36px !important;
+  line-height: 36px !important;
+  padding: 0 18px !important;
+  border-radius: 18px !important;
+  border: none !important;
+  outline: none !important;
+  background: #3b82f6 !important;
+  color: #ffffff !important;
+  font-family: "Roboto", -apple-system, BlinkMacSystemFont, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  transition: background-color 0.2s ease, transform 0.1s ease !important;
+}
+
+.studytube-comments-toggle-btn:hover {
+  background: #2563eb !important;
+}
+
+.studytube-comments-toggle-btn:active {
+  transform: scale(0.97) !important;
+}
+
+.studytube-comments-toggle-btn * {
+  pointer-events: none !important;
+}
+
+/* Revealed comments state with minimal re-hide bar */
+.studytube-comments-placeholder.is-revealed {
+  padding: 10px 16px !important;
+  margin-bottom: 12px !important;
+  background: rgba(255, 255, 255, 0.02) !important;
+  border-style: solid !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.studytube-comments-placeholder.is-revealed .studytube-comments-toggle-btn {
+  height: 30px !important;
+  line-height: 30px !important;
+  padding: 0 14px !important;
+  font-size: 12px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: var(--yt-spec-text-primary, #f1f1f1) !important;
+}
+
+.studytube-comments-placeholder.is-revealed .studytube-comments-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.2) !important;
+}

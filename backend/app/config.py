@@ -5,6 +5,10 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+from pathlib import Path
+_BACKEND_DIR = Path(__file__).resolve().parent.parent
+_ROOT_DIR = _BACKEND_DIR.parent
+
 class Settings(BaseSettings):
     """Central configuration for StudyTube backend."""
 
@@ -17,7 +21,7 @@ class Settings(BaseSettings):
     PORT: int = 8000
 
     # CORS configuration
-    CORS_ORIGINS: List[str] = [
+    CORS_ORIGINS: Union[str, List[str]] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "http://localhost:8000",
@@ -28,10 +32,15 @@ class Settings(BaseSettings):
     # Allow matching unpacked chrome-extension:// origins
     CORS_ALLOW_EXTENSION_REGEX: bool = True
 
-    # Future LLM configuration placeholders
+    # LLM Configuration
+    # Supported providers: "placeholder", "gemini", "openai", "ollama"
     LLM_PROVIDER: str = "placeholder"
     LLM_API_KEY: str = ""
-    LLM_MODEL: str = "placeholder-model"
+    LLM_MODEL: str = "gemini-1.5-flash"
+    LLM_BASE_URL: Union[str, None] = None
+    LLM_TIMEOUT_SECONDS: float = 5.0
+    LLM_FALLBACK_DEFAULT: str = "gaming"
+    CACHE_SIZE: int = 1000
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -50,7 +59,7 @@ class Settings(BaseSettings):
         return []
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(str(_BACKEND_DIR / ".env"), str(_ROOT_DIR / ".env"), ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=True,
@@ -58,3 +67,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

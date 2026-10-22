@@ -20,4 +20,6 @@ async def health_check() -> HealthResponse:
         status="healthy",
         version=settings.VERSION,
         environment=settings.ENVIRONMENT,
+        llm_provider=settings.LLM_PROVIDER,
+        llm_model=settings.LLM_MODEL,
     )

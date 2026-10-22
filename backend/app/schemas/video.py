@@ -1,7 +1,32 @@
 """Pydantic schemas for video classification requests and responses."""
 
-from typing import Optional
+from typing import List, Optional
 from pydantic import BaseModel, Field, field_validator, ConfigDict
+
+# Standard StudyTube categories per specification
+STANDARD_CATEGORIES: List[str] = [
+    "education_academics",
+    "programming_technology",
+    "career_business",
+    "productivity_self_improvement",
+    "health_fitness",
+    "news_current_affairs",
+    "documentaries_explainers",
+    "gaming",
+    "entertainment_comedy",
+    "music",
+    "lifestyle_vlogs",
+    "hobbies_creative_arts",
+    "unknown",
+]
+
+# ALLOWED_CATEGORIES includes backward-compatible mock categories like "educational"
+ALLOWED_CATEGORIES: List[str] = STANDARD_CATEGORIES + ["educational"]
+
+# Random fallback categories must exclude "unknown" per specification
+FALLBACK_CATEGORIES: List[str] = [
+    cat for cat in STANDARD_CATEGORIES if cat != "unknown"
+]
 
 
 class ClassificationRequest(BaseModel):
@@ -77,17 +102,27 @@ class ClassificationResponse(BaseModel):
     video_id: str = Field(..., description="The classified YouTube video ID.")
     category: str = Field(..., description="Predicted educational/entertainment category.")
     confidence: float = Field(..., ge=0.0, le=1.0, description="Confidence score between 0.0 and 1.0.")
-    suggested_mode: str = Field(..., description="Suggested playback mode: 'grayscale' or 'color'.")
+    suggested_mode: str = Field(default="grayscale", description="Suggested playback mode: 'grayscale' or 'color'.")
     classifier: str = Field(..., description="Identifier of the classifier model or service used.")
+    is_fallback: bool = Field(default=False, description="Whether this response was generated via failure fallback.")
+
+    @field_validator("category")
+    @classmethod
+    def validate_category(cls, v: str) -> str:
+        clean = v.strip().lower() if isinstance(v, str) else "unknown"
+        if clean not in ALLOWED_CATEGORIES:
+            return "unknown"
+        return clean
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "video_id": "example123",
-                "category": "unknown",
-                "confidence": 0.0,
+                "category": "education_academics",
+                "confidence": 0.95,
                 "suggested_mode": "grayscale",
-                "classifier": "placeholder",
+                "classifier": "gemini:gemini-1.5-flash",
+                "is_fallback": False,
             }
         }
     )
