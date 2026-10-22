@@ -1,0 +1,14 @@
+{
+  "studytube_enabled": true,
+  "whitelisted_categories": [
+    "programming_technology",
+    "career_business"
+  ],
+  "block_shorts_scroll": true,
+  "block_shorts_playback": true,
+  "hide_comments": true,
+  "hide_live_chat": true,
+  "strict_fallback": true,
+  "backend_url": "http://127.0.0.1:8000",
+  "updated_at": "2026-10-22T16:29:36.161305+00:00"
+}

@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StudyTube Focus Settings</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="popup-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-icon">ST</div>
+        <div>
+          <h1 class="title">StudyTube</h1>
+          <div class="subtitle">Focus Mode &amp; Filter v0.2.0</div>
+        </div>
+      </div>
+      <label class="switch master-switch" title="Toggle StudyTube Master Focus Mode">
+        <input type="checkbox" id="masterToggle" checked>
+        <span class="slider"></span>
+      </label>
+    </header>
+
+    <!-- Master Focus Mode Status Banner -->
+    <div class="status-banner" id="statusBanner">
+      <span class="status-dot online" id="masterStatusDot"></span>
+      <span class="status-text" id="statusText">Focus Mode Active</span>
+      <button class="status-retry-btn" id="retryConnectionBtn" title="Test Backend Connection">Test API</button>
+    </div>
+
+    <!-- Quick Presets -->
+    <div class="section-header">
+      <span>Focus Presets</span>
+    </div>
+    <div class="presets-row">
+      <button class="preset-btn active" id="presetStudy" title="Study Focus (Academics, Tech, Business, Productivity, Fitness, Documentaries)">🎓 Study</button>
+      <button class="preset-btn" id="presetStrict" title="Strict Academic (Education & Programming Only)">⚡ Strict</button>
+      <button class="preset-btn" id="presetAll" title="Allow All Categories (In Grayscale)">🌐 All</button>
+      <button class="preset-btn" id="presetClear" title="Block All Video Recommendations">🚫 None</button>
+    </div>
+
+    <!-- Distraction Shields (All Settings) -->
+    <div class="section-header">
+      <span>Distraction Shields</span>
+    </div>
+    <div class="shield-card">
+      <!-- 1. Hide Comments Section -->
+      <div class="shield-item">
+        <div class="shield-info">
+          <span class="shield-title">Hide Comments Section</span>
+          <span class="shield-desc">Shield comments with interactive "Show anyway" button</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="hideCommentsToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- 2. Block Shorts Scrolling -->
+      <div class="shield-item">
+        <div class="shield-info">
+          <span class="shield-title">Block Shorts Scrolling</span>
+          <span class="shield-desc">Prevent infinite vertical scrolling on Shorts feed</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="blockShortsScrollToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- 3. Block Shorts Playback -->
+      <div class="shield-item">
+        <div class="shield-info">
+          <span class="shield-title">Block Shorts Playback</span>
+          <span class="shield-desc">Freeze and lock video playback on Shorts player</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="blockShortsPlaybackToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- 4. Hide Live Chat -->
+      <div class="shield-item">
+        <div class="shield-info">
+          <span class="shield-title">Hide Live Chat</span>
+          <span class="shield-desc">Eliminate live stream chat distractions</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="hideChatToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <!-- 5. Strict Fallback Policy -->
+      <div class="shield-item">
+        <div class="shield-info">
+          <span class="shield-title">Strict Fallback (Blacklist on Error)</span>
+          <span class="shield-desc">Blacklist video recommendations if AI classification fails</span>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="strictFallbackToggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Category Whitelist with Counter Badge -->
+    <div class="section-header">
+      <span>Whitelisted Categories (Allowed in Grayscale)</span>
+      <span class="counter-badge" id="whitelistCountBadge">6 of 12 Allowed</span>
+    </div>
+    <div class="category-list" id="categoryList">
+      <!-- Generated dynamically in popup.js -->
+    </div>
+
+    <!-- Backend AI Classifier Configuration -->
+    <div class="section-header">
+      <span>AI Classifier Server</span>
+    </div>
+    <div class="backend-config">
+      <input type="text" id="backendUrlInput" value="http://127.0.0.1:8000" placeholder="http://127.0.0.1:8000" spellcheck="false">
+      <button id="saveBackendUrlBtn" class="primary-btn">Save</button>
+    </div>
+
+    <!-- Dashboard Link -->
+    <div style="margin-top: 6px;">
+      <a href="http://127.0.0.1:8000/dashboard" target="_blank" id="openDashboardLink" style="display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px; border-radius: 8px; background: linear-gradient(135deg, #4f46e5, #06b6d4); color: #ffffff; text-decoration: none; font-size: 13px; font-weight: 600; text-align: center; box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35); box-sizing: border-box; transition: transform 0.15s ease;">
+        🖥️ Open Web Dashboard
+      </a>
+    </div>
+
+    <footer class="footer">
+      <span>Settings sync directly in real-time across YouTube &amp; Web Dashboard.</span>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

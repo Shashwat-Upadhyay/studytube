@@ -1,289 +1,424 @@
-# StudyTube — Focus Mode & Classification Backend
+# StudyTube — Intelligent Focus Mode, Category Whitelisting & LLM Classifier
 
-StudyTube is a Chrome Extension (Manifest V3) and companion FastAPI backend designed to eliminate distractions on YouTube, enforce grayscale by default, and provide intelligent content classification for focused learning.
-
----
-
-## Features
-
-- **Distraction Barrier:** Blackouts recommendation cards on the YouTube Home page and watch page sidebar.
-- **Grayscale by Default:** All opened videos start in grayscale automatically, including in-player end-screen recommendations, videowalls, and autoplay countdowns.
-- **Intentional Color Toggle:** Allows watching a specific video in color via the `🌈 Watch in color` button; automatically restores grayscale when transitioning to another video.
-- **Modular Classification Backend:** FastAPI service accepting video metadata (`video_id`, `title`, `channel_name`, `url`), validating payloads, and serving focus classifications with an extensible architecture prepared for future LLM integration.
+**StudyTube** is an open-source, AI-powered productivity system engineered to transform YouTube from an algorithmic distraction loop into a focused learning environment. Built as a Manifest V3 Chrome extension, reactive glassmorphism web dashboard, and high-performance FastAPI backend, StudyTube enforces video grayscale by default, blocks addictive Shorts feeds, shields comments and live chats, and intelligently classifies recommendation thumbnails using state-of-the-art Local and Cloud Large Language Models (LLMs).
 
 ---
 
-## Repository Structure
+## 📑 Table of Contents
+
+- [Executive Overview](#-executive-overview)
+- [Key Features](#-key-features)
+- [System Architecture](#-system-architecture)
+- [Technical Working & Inner Mechanics](#-technical-working--inner-mechanics)
+  - [1. DOM Discovery & Recommendation Processing](#1-dom-discovery--recommendation-processing)
+  - [2. Sequential Classification Queue (Anti-Overload)](#2-sequential-classification-queue-anti-overload)
+  - [3. LLM Provider Tier & Classification Taxonomy](#3-llm-provider-tier--classification-taxonomy)
+  - [4. In-Player Grayscale & Native Color Overrides](#4-in-player-grayscale--native-color-overrides)
+  - [5. YouTube Shorts Shield (Wiz Component Architecture)](#5-youtube-shorts-shield-wiz-component-architecture)
+  - [6. Direct PostMessage Bridge (Bi-Directional Sync)](#6-direct-postmessage-bridge-bi-directional-sync)
+- [12 Content Categories](#-12-content-categories)
+- [Project Directory Structure](#-project-directory-structure)
+- [Installation & Quickstart Guide](#-installation--quickstart-guide)
+  - [1. Chrome Extension Installation](#1-chrome-extension-installation)
+  - [2. Backend API Setup](#2-backend-api-setup)
+  - [3. LLM Provider Configuration](#3-llm-provider-configuration)
+  - [4. Web Dashboard Usage](#4-web-dashboard-usage)
+- [Automated Testing & Verification](#-automated-testing--verification)
+- [License & Contributing](#-license--contributing)
+
+---
+
+## 🎯 Executive Overview
+
+Modern video platforms rely on hyper-stimulating thumbnails, vibrant saturated colors, endless vertical shorts, and engaging comment sections designed to maximize session length. 
+
+StudyTube breaks this behavioral capture loop by:
+1. **Removing Visual Stimulation**: Playing all videos (both Watch and Shorts) in high-contrast **grayscale** by default.
+2. **Filtering Algorithmic Recommendations**: Hiding entertainment and gaming thumbnails while whitelisting educational, technical, and career-focused videos.
+3. **Throttling Rapid Consumption**: Queuing video classifications sequentially to prevent system overload during fast scrolling.
+4. **Eliminating Compulsive Behaviors**: Disabling infinite vertical scrolling on Shorts, hiding scroll navigation arrows, and shielding comment sections until deliberately revealed.
+
+---
+
+## ✨ Key Features
+
+| Feature | Description |
+| :--- | :--- |
+| **🧠 Real LLM Classification** | Evaluates video titles, channel names, and metadata against 12 granular categories using **Ollama** (Local GPU/CPU), **Google Gemini**, or **OpenAI**. |
+| **🚦 Sequential Classification Queue** | FIFO processing queue that sends one video at a time to local LLMs, preventing request spikes when fast-scrolling. |
+| **🏷️ Thumbnail Whitelist Badges** | Renders a semi-transparent category badge (e.g. `💻 Programming Technology`) on the top-right corner of whitelisted videos. |
+| **⏳ "Classification Pending" State** | Displays an unobtrusive pending indicator instead of premature blackouts while titles are awaiting LLM evaluation. |
+| **🩶 Native In-Player Grayscale** | Enforces CSS grayscale filters strictly on `<video>` elements, leaving subtitles, player controls, and scrub bars clean. |
+| **🎨 "View in Color" Action Buttons** | Seamless native buttons matching YouTube design specs: a pill button on Watch pages (beside Share) and a circular button on Shorts (above Like). |
+| **🚫 Complete Shorts Distraction Shield** | Disables continuous wheel/key scrolling, freezes playback, removes navigation scroll arrows, and cleanly shields comments with zero layout shift. |
+| **💬 Comments Section Shield** | Collapses comments on Watch and Shorts with an interactive, reversible **"Show comments"** button to restore focus on demand. |
+| **💬 Live Chat Shield** | Automatically removes live stream chat streams to eliminate fast-scrolling conversational distractions. |
+| **🔄 Direct Web Dashboard Bridge** | Real-time bi-directional synchronization between the deployed glassmorphism Web Dashboard (`frontend/`) and the Chrome extension via `bridge.js`. |
+
+---
+
+## 🏗️ System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                                 GOOGLE CHROME                                   │
+│                                                                                 │
+│   ┌───────────────────────────────┐           ┌─────────────────────────────┐   │
+│   │         YouTube Tab           │           │     StudyTube Dashboard     │   │
+│   │     (https://youtube.com)     │           │      (frontend/index.html)  │   │
+│   │                               │           │                             │   │
+│   │  ┌─────────────────────────┐  │           │  ┌───────────────────────┐  │   │
+│   │  │   content.js (DOM Hook) │  │           │  │   app.js (Reactive)   │  │   │
+│   │  │   • MutationObserver    │  │           │  │   • Category Toggles  │  │   │
+│   │  │   • Grayscale Enforcer  │  │           │  │   • Master Shields    │  │   │
+│   │  │   • Thumbnail Badges    │  │           │  │   • AI Test Sandbox   │  │   │
+│   │  │   • Shorts UI Injector  │  │           │  └───────────┬───────────┘  │   │
+│   │  └────────────┬────────────┘  │                          │              │   │
+│   │               │               │                          │              │   │
+│   │  ┌────────────┴────────────┐  │   window.postMessage     │              │   │
+│   │  │  bridge.js (Extension)  │◄─┼──────────────────────────┘              │   │
+│   │  └────────────┬────────────┘  │                                         │   │
+│   └───────────────┼───────────────┘                                         │   │
+│                   │ chrome.runtime.sendMessage                              │   │
+│                   ▼                                                         │   │
+│   ┌───────────────────────────────┐           ┌─────────────────────────────┐   │
+│   │  background.js (Worker)       │           │   popup.html / popup.js     │   │
+│   │  • FIFO Classification Queue  │◄─────────►│   • Native Toolbar UI       │   │
+│   │  • In-Memory Deduplication    │  Storage  │   • Instant Whitelist Sync  │   │
+│   │  • chrome.storage.local Cache │  Events   │   • Quick Presets           │   │
+│   └───────────────┬───────────────┘           └─────────────────────────────┘   │
+└───────────────────┼─────────────────────────────────────────────────────────────┘
+                    │ HTTP POST /api/v1/classify
+                    ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         FASTAPI BACKEND SERVICE (PORT 8000)                     │
+│                                                                                 │
+│   ┌─────────────────────────────────────────────────────────────────────────┐   │
+│   │  API Layer (app/main.py & app/api/v1/)                                  │   │
+│   │  • CORS Headers (allows Chrome extensions & Web dashboards)             │   │
+│   │  • Schema Validation (Pydantic models, title & video_id sanitization)   │   │
+│   │  • Settings Persistence (app/settings.json)                             │   │
+│   └────────────────────────────────────┬────────────────────────────────────┘   │
+│                                        │                                        │
+│   ┌────────────────────────────────────▼────────────────────────────────────┐   │
+│   │  Classification Service (app/services/classifier.py)                    │   │
+│   │  • In-Memory Thread-Safe LRU Cache (video_id keyed)                     │   │
+│   │  • In-Flight Request Deduplication                                      │   │
+│   │  • Strict Single-Word Category Prompt & Sanitizer                       │   │
+│   │  • Deterministic Fallback Policy (is_fallback: true, never cached)      │   │
+│   └────────────────────────────────────┬────────────────────────────────────┘   │
+└────────────────────────────────────────┼────────────────────────────────────────┘
+                                         │
+                    ┌────────────────────┴────────────────────┐
+                    ▼                                         ▼
+   ┌─────────────────────────────────┐       ┌─────────────────────────────────┐
+   │        LOCAL LLM (OLLAMA)       │       │        CLOUD LLM PROVIDERS      │
+   │  • http://localhost:11434/v1    │       │  • Google Gemini API            │
+   │  • llama3.2:3b / qwen2.5        │       │    (gemini-1.5-flash)           │
+   │  • 100% Free & Private          │       │  • OpenAI (gpt-4o-mini)         │
+   │  • GPU Accelerated (RTX / CUDA) │       │  • Offline Rule Mock            │
+   └─────────────────────────────────┘       └─────────────────────────────────┘
+```
+
+---
+
+## ⚙️ Technical Working & Inner Mechanics
+
+### 1. DOM Discovery & Recommendation Processing
+
+YouTube is a dynamic Single Page Application (SPA) driven by Polymer and Wiz custom elements. Video cards are continuously mounted, unmounted, and recycled during navigation:
+
+- **Debounced MutationObserver**: Observes `document.documentElement` for subtree modifications, throttling layout evaluations through `requestAnimationFrame`.
+- **Card Target Recognition**: Accurately targets standard videos (`ytd-rich-item-renderer`, `ytd-video-renderer`, `ytd-compact-video-renderer`), notification items, search results, and grid lockups (`yt-lockup-view-model`).
+- **Data Extraction**: Extracts `video_id`, title text, channel name, and href without triggering premature DOM reflows.
+
+### 2. Sequential Classification Queue (Anti-Overload)
+
+Local LLMs (e.g., Ollama running `llama3.2:3b` on consumer GPUs) can become bottlenecked when users scroll quickly past 30+ recommendation cards at once.
+
+StudyTube prevents server congestion using a client-side **FIFO Classification Queue**:
+```javascript
+// extension/content.js
+class VideoClassificationQueue {
+  enqueue(videoData, onComplete) {
+    this.queue.push({ videoData, onComplete });
+    this.processNext();
+  }
+  async processNext() {
+    if (this.isProcessing || this.queue.length === 0) return;
+    this.isProcessing = true;
+    const { videoData, onComplete } = this.queue.shift();
+    try {
+      const result = await requestClassification(videoData);
+      onComplete(result);
+    } finally {
+      this.isProcessing = false;
+      this.processNext(); // Send next item only after previous completes
+    }
+  }
+}
+```
+- **Classification Pending State**: While queued, thumbnails display a minimal, modern overlay labeled `⏳ Classification pending...` instead of an abrupt blackout.
+- **Whitelist Badge Placement**: Once classified, approved videos receive a lightweight category pill badge (`.studytube-category-pill`) in the top-right corner of their thumbnail.
+
+### 3. LLM Provider Tier & Classification Taxonomy
+
+The backend accepts classification requests at `POST /api/v1/classify`, validated against strict Pydantic models.
+
+```json
+// POST /api/v1/classify
+{
+  "video_id": "M576WGiDBdQ",
+  "title": "Introduction to Algorithms and Data Structures",
+  "channel_name": "MIT OpenCourseWare",
+  "url": "https://www.youtube.com/watch?v=M576WGiDBdQ"
+}
+```
+
+#### Prompt Engineering & Output Sanitization
+The classifier formats instructions with strict few-shot examples and schema bounds:
+```
+You are a video classification assistant. Classify the YouTube video into exactly ONE category.
+Allowed categories: education_academics, programming_technology, career_business, productivity_self_improvement, health_fitness, news_current_affairs, documentaries_explainers, gaming, entertainment_comedy, music, lifestyle_vlogs, hobbies_creative_arts.
+Respond with ONLY the exact category name. Do not include punctuation, markdown, or explanation.
+```
+
+#### Safe Fallback Policy
+If an LLM experiences network timeout or returns malformed text:
+- The system automatically assigns a random defined category (excluding `unknown`).
+- Flags the response with `is_fallback: true` and sets `confidence: 0.1`.
+- **Never stores fallback results in the persistent cache**, ensuring subsequent requests retry classification properly.
+
+### 4. In-Player Grayscale & Native Color Overrides
+
+Grayscale is enforced selectively on active video surfaces (`video`, `.html5-main-video`, `.ytp-ce-element`) while keeping YouTube's timeline, scrub bar, captions, and playback controls in full color.
+
+#### Scoped Color Toggle (Watch Pages)
+- StudyTube injects a native-style pill button beside the **Share** button in `#top-level-buttons-computed`.
+- Uses YouTube's exact pill typography (`Roboto`, 14px, 500 weight), 36px height, 18px radius, and adaptive dark/light mode tokens (`var(--yt-spec-badge-chip-background)`).
+- Clicking toggles grayscale on/off for the active video. The override automatically resets to grayscale as soon as the user navigates to another video.
+
+### 5. YouTube Shorts Shield (Wiz Component Architecture)
+
+Modern YouTube Shorts uses custom elements (`<reel-action-bar-view-model class="ytwReelActionBarViewModelHost ytwReelActionBarViewModelHostDesktop">`) rather than legacy Polymer IDs.
+
+- **Idempotent Injection**: Locates `<reel-action-bar-view-model>` and injects a 48x48px circular **Color** toggle button directly above the native Like button.
+- **Ancestor Overflow Handling**: Sets `overflow: visible !important;` across 4 parent overlay hierarchy levels (`ytwReelsPlayerOverlayLayoutViewModelHostActionBar`, `ytd-reel-player-overlay-renderer`), guaranteeing the top toggle button is never clipped.
+- **Comments & Orphan Count Shield**: Targets both the comment button and sibling count elements (`#comments-button + *`, `:has([aria-label*="comment" i])`), eliminating orphaned numbers like `79` from floating in the action bar.
+- **Scroll Lock & Navigation Arrow Removal**: Strips navigation up/down buttons (`#navigation-button-down`, `#navigation-button-up`) and intercepts wheel events when Shorts scrolling is blocked.
+
+### 6. Direct PostMessage Bridge (Bi-Directional Sync)
+
+To ensure the web dashboard can be deployed independently of the backend while remaining synchronized with the extension:
+- `extension/bridge.js` runs at `document_start` on the dashboard domain.
+- Listens for `window.postMessage` events of type `STUDYTUBE_SET_SETTINGS`.
+- Immediately commits updates to Chrome extension storage (`chrome.storage.local.set`).
+- When settings change in the Chrome popup, `chrome.storage.onChanged` dispatches a `STUDYTUBE_SETTINGS_UPDATED` message back to the dashboard, providing zero-latency two-way synchronization.
+
+---
+
+## 🗂️ 12 Content Categories
+
+| Category Slug | Display Name | Included Topics |
+| :--- | :--- | :--- |
+| `education_academics` | 🎓 Education & Academics | Lectures, math, science, history, academic tutorials, university courses |
+| `programming_technology` | 💻 Programming & Tech | Software development, AI, hardware, coding tutorials, cybersecurity |
+| `career_business` | 💼 Career & Business | Finance, entrepreneurship, investing, resume reviews, marketing |
+| `productivity_self_improvement` | ⚡ Productivity & Growth | Time management, study habits, book summaries, mental discipline |
+| `health_fitness` | 🏋️ Health & Fitness | Workouts, nutrition, physical therapy, sports science |
+| `documentaries_explainers` | 🎥 Documentaries & Deep Dives | Investigative journalism, video essays, deep explainer videos |
+| `news_current_affairs` | 📰 News & Current Affairs | Global news, economics, political analysis, journalism |
+| `hobbies_creative_arts` | 🎨 Hobbies & Arts | Woodworking, digital art, photography, 3D modeling, cooking |
+| `gaming` | 🎮 Gaming | Let's plays, esports, walkthroughs, stream highlights |
+| `entertainment_comedy` | 🍿 Entertainment & Comedy | Sketches, memes, movie reviews, reaction videos, drama |
+| `music` | 🎵 Music & Audio | Music videos, tracks, covers, live concert recordings |
+| `lifestyle_vlogs` | ☕ Lifestyle & Vlogs | Daily routines, travel vlogs, unboxing, celebrity content |
+
+---
+
+## 📂 Project Directory Structure
 
 ```
 studytube/
-├── manifest.json              # Chrome Extension Manifest V3 configuration
-├── content.js                 # Content script enforcing grayscale & card overlays
-├── content.css                # CSS rules for blackout overlays and player grayscale
-├── .gitignore                 # Excludes secrets (.env), virtual environments, caches
-├── README.md                  # Main setup, running, and testing documentation
-└── backend/
-    ├── .env.example           # Environment configuration template
-    ├── requirements.txt       # FastAPI, Uvicorn, Pydantic, and Pytest dependencies
-    ├── README.md              # Detailed backend API reference
-    ├── verify_backend.py      # Quick end-to-end verification script
+├── README.md                      # Complete system documentation & architecture
+├── .gitignore                     # Git ignore rules for secrets, virtual environments, caches
+├── extension/                     # Manifest V3 Chrome Extension
+│   ├── manifest.json              # Extension metadata, permissions & content script declarations
+│   ├── background.js              # Service worker handling API requests, deduplication & caching
+│   ├── content.js                 # Content script for grayscale, DOM shields, queue, and badges
+│   ├── content.css                # CSS rules for shields, badges, overlays, and color buttons
+│   ├── bridge.js                  # PostMessage bridge for zero-backend web dashboard synchronization
+│   ├── popup.html                 # Native Chrome popup interface
+│   ├── popup.css                  # Modern dark-mode popup stylesheet
+│   ├── popup.js                   # Popup state manager with presets and whitelist toggles
+│   └── icons/                     # Extension branding icons (16x16, 48x48, 128x128)
+├── frontend/                      # Web Dashboard Command Center
+│   ├── index.html                 # Dark-mode dashboard with master controls, category grid & sandbox
+│   ├── style.css                  # Responsive glassmorphism styling
+│   └── app.js                     # Two-way sync engine and live AI classifier testing sandbox
+└── backend/                       # FastAPI Classification Microservice
+    ├── requirements.txt           # Python dependencies (FastAPI, Uvicorn, Pydantic, HTTPX, Pytest)
+    ├── .env.example               # Environment template for LLM configuration
+    ├── README.md                  # Backend API specification and endpoint documentation
+    ├── verify_backend.py          # Standalone verification script for backend validation
     ├── app/
-    │   ├── __init__.py
-    │   ├── main.py            # FastAPI entrypoint, CORS, and error handlers
-    │   ├── config.py          # Pydantic Settings & CORS parser
-    │   ├── api/
-    │   │   ├── __init__.py
-    │   │   └── v1/
-    │   │       ├── router.py  # API v1 router
-    │   │       └── endpoints/
-    │   │           ├── classify.py # POST /api/v1/classify
-    │   │           └── health.py   # GET /api/v1/health
+    │   ├── main.py                # FastAPI application instance, CORS configuration & lifecycle hooks
+    │   ├── config.py              # Pydantic Settings reading environment variables
+    │   ├── settings.json          # Persistent settings storage for the web dashboard
+    │   ├── api/v1/
+    │   │   ├── router.py          # Root API router
+    │   │   └── endpoints/
+    │   │       ├── classify.py    # POST /api/v1/classify video classification endpoint
+    │   │       ├── health.py      # GET /health & GET /api/v1/health status checks
+    │   │       └── settings.py    # GET & POST /api/v1/settings synchronization endpoint
     │   ├── schemas/
-    │   │   ├── video.py       # ClassificationRequest & ClassificationResponse
-    │   │   └── health.py      # HealthResponse schema
+    │   │   ├── video.py           # Pydantic models for classification requests and responses
+    │   │   ├── settings.py        # Settings validation schemas
+    │   │   └── health.py          # Health status models
     │   └── services/
-    │       └── classifier.py  # BaseClassifier ABC & PlaceholderClassifier
+    │       └── classifier.py      # Classifier implementations: Ollama, Gemini, OpenAI, Placeholder
     └── tests/
-        ├── test_health.py     # Health endpoint & OpenAPI tests
-        └── test_classify.py   # Validation, CORS, and classifier swap tests
+        ├── conftest.py            # TestClient fixtures and Starlette compatibility shims
+        ├── test_classify.py       # Validation tests, CORS checks, and classifier hot-swapping
+        ├── test_filtering_policy.py # Whitelist matching, Shorts extraction, and chat shield tests
+        ├── test_health.py         # Health endpoint & OpenAPI documentation tests
+        ├── test_llm_and_categories.py # Mocks for Gemini, OpenAI, Ollama, caching, and fallback
+        └── test_settings.py       # Settings persistence and synchronization tests
 ```
 
 ---
 
-## Chrome Extension Setup
+## 🚀 Installation & Quickstart Guide
 
-### 1. Install Unpacked Extension in Chrome
+### 1. Chrome Extension Installation
 
-1. Open Google Chrome and navigate to `chrome://extensions/`.
-2. Enable **Developer mode** using the toggle switch in the top-right corner.
+1. Open Google Chrome and go to `chrome://extensions/`.
+2. Enable **Developer mode** in the upper-right corner.
 3. Click **Load unpacked** in the top-left corner.
-4. Select the `d:\My_Projects\studytube` project directory.
-5. StudyTube will appear in your extensions list. Note the 32-character **Extension ID** (e.g. `nkbihfbeogaeaoehlefnkodbefgpgknn`).
-
-### 2. Verify in YouTube
-
-1. Open or refresh `https://www.youtube.com`.
-2. Press `F12` to open Chrome DevTools and look for `[StudyTube] Focus Mode running.` in the **Console** tab.
-3. Home page recommendation cards will display the blacked-out `StudyTube — Reveal & watch in grayscale` cover.
-4. Opening any video will automatically start playback in grayscale with the `🌈 Watch in color` toggle button attached.
+4. Select the `extension/` folder in this repository (`d:\Projects\studytube\extension`).
+5. The **StudyTube** icon will now appear in your browser toolbar.
 
 ---
 
-## Backend Setup
+### 2. Backend API Setup
 
-### 1. Prerequisites
-
+#### Prerequisites
 - **Python 3.10+**
 - **pip**
 
-### 2. Create and Activate Virtual Environment
+#### Setup Steps
 
-```powershell
-# Windows (PowerShell)
-cd d:\My_Projects\studytube\backend
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-```bash
-# macOS / Linux
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 3. Install Dependencies
-
-```powershell
-pip install -r requirements.txt
-```
-
-### 4. Configure Environment Variables
-
-```powershell
-# Windows (PowerShell)
-Copy-Item .env.example .env
-
-# macOS / Linux
-cp .env.example .env
-```
-
-Review `backend/.env` and configure settings as desired:
-- `CORS_ORIGINS`: Comma-separated list or JSON array of allowed origins (e.g. `chrome-extension://<YOUR_EXTENSION_ID>`).
-- `CORS_ALLOW_EXTENSION_REGEX`: Set to `true` to allow local unpacked extension IDs during development.
-- `PORT` / `HOST`: Server host and port (defaults to `127.0.0.1:8000`).
-
-### 5. Start the Development Server
-
-From within the `backend/` directory:
-
-```powershell
-.\.venv\Scripts\uvicorn.exe app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-Or from the workspace root:
-
-```powershell
-.\backend\.venv\Scripts\uvicorn.exe --app-dir backend app.main:app --reload --host 127.0.0.1 --port 8000
-```
-
-The server will be running at `http://127.0.0.1:8000`.
-
----
-
-## Testing & Verification
-
-### 1. Run Automated Test Suite (Pytest)
-
-Run all 14 unit and integration tests covering health checks, schema validation boundaries, CORS preflight, and classifier service swapping:
-
-```powershell
-# From the backend directory
-pytest -v
-
-# Or from the repository root
-.\backend\.venv\Scripts\pytest.exe backend\tests -v
-```
-
-**Expected output:**
-```
-backend/tests/test_classify.py::test_classify_valid_full_payload PASSED
-backend/tests/test_classify.py::test_classify_valid_required_fields_only PASSED
-backend/tests/test_classify.py::test_classify_missing_title_rejected PASSED
-backend/tests/test_classify.py::test_classify_blank_whitespace_title_rejected PASSED
-backend/tests/test_classify.py::test_classify_missing_video_id_rejected PASSED
-backend/tests/test_classify.py::test_classify_blank_whitespace_video_id_rejected PASSED
-backend/tests/test_classify.py::test_classify_title_exceeding_max_length_rejected PASSED
-backend/tests/test_classify.py::test_classify_video_id_exceeding_max_length_rejected PASSED
-backend/tests/test_classify.py::test_classify_malformed_json_body PASSED
-backend/tests/test_classify.py::test_cors_preflight_for_chrome_extension PASSED
-backend/tests/test_classify.py::test_classifier_service_replacement PASSED
-backend/tests/test_health.py::test_root_health_endpoint PASSED
-backend/tests/test_health.py::test_api_v1_health_endpoint PASSED
-backend/tests/test_health.py::test_openapi_docs_endpoint PASSED
-
-======================== 14 passed in 0.63s ========================
-```
-
-### 2. Run End-to-End Verification Script
-
-Run the verification script to test live client responses and validation error structures:
-
-```powershell
-.\backend\.venv\Scripts\python.exe backend\verify_backend.py
-```
-
-### 3. Test Endpoints Interactively (Swagger UI)
-
-Open `http://127.0.0.1:8000/docs` in your browser to inspect and trigger endpoints interactively through Swagger UI.
-
-### 4. Test Endpoints via CLI
-
-#### A. Health Check (`GET /health`)
-```powershell
-# PowerShell
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/health" -Method Get
-```
-```bash
-# cURL
-curl -X GET "http://127.0.0.1:8000/health"
-```
-**Response (200 OK):**
-```json
-{
-  "status": "healthy",
-  "version": "0.1.0",
-  "timestamp": "2026-10-21T11:18:48.350083Z",
-  "environment": "development"
-}
-```
-
-#### B. Video Classification (`POST /api/v1/classify`)
-```powershell
-# PowerShell
-$body = @{
-    video_id = "example123"
-    title = "Introduction to Machine Learning"
-    channel_name = "Example Learning"
-    url = "https://www.youtube.com/watch?v=example123"
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/classify" -Method Post -Body $body -ContentType "application/json"
-```
-```bash
-# cURL
-curl -X POST "http://127.0.0.1:8000/api/v1/classify" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "video_id": "example123",
-    "title": "Introduction to Machine Learning",
-    "channel_name": "Example Learning",
-    "url": "https://www.youtube.com/watch?v=example123"
-  }'
-```
-**Response (200 OK):**
-```json
-{
-  "video_id": "example123",
-  "category": "unknown",
-  "confidence": 0.0,
-  "suggested_mode": "grayscale",
-  "classifier": "placeholder"
-}
-```
-
-#### C. Validation Failure Check (Blank Title)
-```powershell
-# PowerShell
-$badBody = @{
-    video_id = "example123"
-    title = "    "
-} | ConvertTo-Json
-
-Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/classify" -Method Post -Body $badBody -ContentType "application/json"
-```
-**Response (422 Unprocessable Content):**
-```json
-{
-  "detail": "Request validation failed",
-  "errors": [
-    {
-      "field": "title",
-      "message": "Value error, title cannot be empty or blank whitespace",
-      "type": "value_error"
-    }
-  ]
-}
-```
-
----
-
-## Extension & Backend Integration (CORS)
-
-When integrating the Chrome extension with the backend:
-
-1. **Origin Header:** Requests originating from the Chrome extension send an origin header in the format `chrome-extension://<EXTENSION_ID>`.
-2. **Configuration:** Add your unpacked Extension ID to `backend/.env`:
-   ```env
-   CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:8000,chrome-extension://your-extension-id-here"
+1. Open a terminal in the `backend/` folder:
+   ```powershell
+   cd d:\Projects\studytube\backend
    ```
-3. **Local Dev Regex:** `CORS_ALLOW_EXTENSION_REGEX=true` is enabled by default to automatically allow any local unpacked extension ID without wildcarding access to arbitrary websites.
-4. **Asynchronous Non-Blocking Pattern:** All client requests from the extension should be asynchronous (`fetch` with `async/await`) to ensure YouTube playback and navigation remain smooth.
+2. Install Python dependencies:
+   ```powershell
+   pip install -r requirements.txt
+   ```
+3. Initialize your `.env` configuration file:
+   ```powershell
+   # Windows PowerShell
+   Copy-Item .env.example .env
+
+   # Linux / macOS
+   cp .env.example .env
+   ```
+4. Start the FastAPI development server:
+   ```powershell
+   uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+   ```
+5. Confirm the server is running by opening `http://127.0.0.1:8000/docs` in your browser.
 
 ---
 
-## Future LLM Integration
+### 3. LLM Provider Configuration
 
-The backend is architected with an abstract base class (`BaseClassifier`) in `backend/app/services/classifier.py`:
+Configure your chosen AI model in `backend/.env`:
 
+#### Option A: Local Ollama (Recommended — 100% Free & Private)
+Run any local model with GPU or CPU acceleration without API keys:
+1. Download and start [Ollama](https://ollama.com).
+2. Pull your desired model:
+   ```bash
+   ollama run llama3.2:3b
+   ```
+3. Update `backend/.env`:
+   ```env
+   LLM_PROVIDER="ollama"
+   LLM_MODEL="llama3.2:3b"
+   LLM_BASE_URL="http://localhost:11434/v1"
+   LLM_TIMEOUT_SECONDS=15.0
+   ```
+
+#### Option B: Google Gemini
+```env
+LLM_PROVIDER="gemini"
+LLM_API_KEY="AIzaSyYourGeminiApiKeyHere"
+LLM_MODEL="gemini-1.5-flash"
 ```
-BaseClassifier (ABC)
-   ├── PlaceholderClassifier (current default)
-   └── LLMClassifier (future Gemini / OpenAI / Anthropic integration)
+
+#### Option C: OpenAI / Compatible
+```env
+LLM_PROVIDER="openai"
+LLM_API_KEY="sk-YourOpenAIApiKeyHere"
+LLM_MODEL="gpt-4o-mini"
 ```
 
-- When implementing an LLM provider:
-  1. Add provider credentials to `backend/.env` (e.g. `LLM_PROVIDER="gemini"`, `LLM_API_KEY="AIza..."`).
-  2. Implement `LLMClassifier(BaseClassifier)` in `backend/app/services/classifier.py`.
-  3. Return it in `get_classifier()` when `settings.LLM_PROVIDER != "placeholder"`.
-- **Security:** API keys and prompt engineering remain strictly on the backend and are never exposed inside the Chrome extension.
+#### Option D: Offline / Placeholder (Zero Setup)
+```env
+LLM_PROVIDER="placeholder"
+```
+
+---
+
+### 4. Web Dashboard Usage
+
+The interactive glassmorphism Web Dashboard is located in `frontend/`.
+
+- Open `frontend/index.html` directly in Chrome, or navigate to `http://127.0.0.1:8000/dashboard` when the backend is running.
+- **Controls Available**:
+  - **Master Switch**: Enable or disable StudyTube globally.
+  - **Distraction Shields**: Toggle Shorts scroll lock, Shorts playback, comments shield, and live chat shield.
+  - **Presets**: 1-click presets including **🎓 Study Focus**, **Strict Tech**, **Allow All**, and **Block All**.
+  - **AI Sandbox**: Paste any YouTube title or URL to inspect the LLM's classification result, confidence score, and latency in real time.
+
+---
+
+## 🧪 Automated Testing & Verification
+
+StudyTube features an automated test suite with **34 comprehensive unit and integration tests** verifying backend health, schema validation, CORS headers, LLM error handling, fallback properties, in-memory caching, request deduplication, and filtering policies.
+
+### Run the Test Suite
+
+From the repository root:
+```powershell
+pytest backend/tests -v
+```
+
+**Test Suite Coverage Summary:**
+- `test_classify.py`: Valid payload processing, required fields validation, title/video ID boundary checks, CORS preflight headers, and dynamic classifier swapping.
+- `test_filtering_policy.py`: Educational category whitelisting, fallback resilience for failed classifications, Shorts URL regex matching, video ID extraction, and manual color override lifecycle.
+- `test_health.py`: Root `/health`, `/api/v1/health`, and OpenAPI documentation availability.
+- `test_llm_and_categories.py`: Category definitions, structured response parsing, Gemini/OpenAI mocked error handling, fallback score invariants, and concurrent request deduplication.
+- `test_settings.py`: Settings read/write endpoints and schema validation.
+
+### Run Backend Verification Script
+```powershell
+python backend/verify_backend.py
+```
+Expected output:
+```
+[SUCCESS] ALL VERIFICATION CHECKS PASSED!
+```
+
+### Validate Frontend & Extension Scripts
+```powershell
+node -c extension/content.js extension/popup.js extension/background.js extension/bridge.js frontend/app.js
+```
+
+---
+
+## 📜 License
+
+Distributed under the **MIT License**. See `LICENSE` for more information.

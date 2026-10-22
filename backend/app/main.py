@@ -1,11 +1,13 @@
 """StudyTube FastAPI application entrypoint."""
 
 import logging
+import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api.v1.router import api_router
 from app.config import settings
@@ -82,6 +84,27 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
+# Root level index route
+@app.get(
+    "/",
+    tags=["system"],
+    summary="Root API Index",
+    description="Welcome route directing users to documentation and health check.",
+)
+async def root_index():
+    """Return API metadata and documentation links."""
+    return {
+        "message": f"Welcome to {settings.PROJECT_NAME}",
+        "version": settings.VERSION,
+        "environment": settings.ENVIRONMENT,
+        "dashboard_url": "/dashboard",
+        "docs_url": "/docs",
+        "health_url": "/health",
+        "classify_url": f"{settings.API_V1_PREFIX}/classify",
+        "settings_url": f"{settings.API_V1_PREFIX}/settings",
+    }
+
+
 # Root level /health endpoint as required by specifications
 @app.get(
     "/health",
@@ -96,8 +119,18 @@ async def root_health_check() -> HealthResponse:
         status="healthy",
         version=settings.VERSION,
         environment=settings.ENVIRONMENT,
+        llm_provider=settings.LLM_PROVIDER,
+        llm_model=settings.LLM_MODEL,
     )
 
 
 # Mount versioned API routes
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
+
+# Mount frontend web dashboard if frontend folder exists
+FRONTEND_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "frontend"
+)
+if os.path.isdir(FRONTEND_DIR):
+    app.mount("/dashboard", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+

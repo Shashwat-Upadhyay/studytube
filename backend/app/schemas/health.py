@@ -14,6 +14,8 @@ class HealthResponse(BaseModel):
         description="Current server timestamp in UTC.",
     )
     environment: str = Field(..., description="Running environment (development, production, etc.).")
+    llm_provider: str = Field(default="placeholder", description="Active LLM classifier provider.")
+    llm_model: str = Field(default="placeholder", description="Active LLM model name.")
 
     model_config = ConfigDict(
         json_schema_extra={
