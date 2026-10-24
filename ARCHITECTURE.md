@@ -1,18 +1,18 @@
 # 🏗️ StudyTube — Technical Architecture & System Design
 
-This document details the high-level architecture, module boundaries, sequence flows, data lifecycle, caching mechanisms, and security model of **StudyTube**.
+This document details the concrete technical architecture, implemented module boundaries, runtime sequence flows, data lifecycle, caching mechanisms, and security model of **StudyTube**.
 
 ---
 
 ## 📑 Table of Contents
 
 - [1. Executive System Overview](#1-executive-system-overview)
-- [2. High-Level Architecture Diagram](#2-high-level-architecture-diagram)
+- [2. System Architecture Diagram](#2-system-architecture-diagram)
 - [3. Subsystem Breakdown](#3-subsystem-breakdown)
   - [3.1 Chrome Extension (Manifest V3)](#31-chrome-extension-manifest-v3)
   - [3.2 FastAPI Backend Microservice](#32-fastapi-backend-microservice)
-  - [3.3 AI Classification & Intelligence Tier](#33-ai-classification--intelligence-tier)
-  - [3.4 Persistent Data & Caching Tier](#34-persistent-data--caching-tier)
+  - [3.3 AI Classification Tier (Local Ollama)](#33-ai-classification-tier-local-ollama)
+  - [3.4 Persistent Storage Tier (SQLite)](#34-persistent-storage-tier-sqlite)
   - [3.5 Reactive Web Dashboard](#35-reactive-web-dashboard)
 - [4. Core Workflows & Sequence Diagrams](#4-core-workflows--sequence-diagrams)
   - [4.1 Video Card Discovery & Classification Flow](#41-video-card-discovery--classification-flow)
@@ -21,23 +21,24 @@ This document details the high-level architecture, module boundaries, sequence f
   - [4.4 Cross-Context Settings Synchronization](#44-cross-context-settings-synchronization)
 - [5. Cache Architecture & LFU Eviction Mechanics](#5-cache-architecture--lfu-eviction-mechanics)
 - [6. Security & Privacy Model](#6-security--privacy-model)
+- [7. Implemented Technology Stack](#7-implemented-technology-stack)
 
 ---
 
 ## 1. Executive System Overview
 
-StudyTube is an end-to-end focus and productivity system for YouTube. It decouples high-level user interface interception (in-browser DOM manipulation) from heavy computational workloads (Large Language Model inference, semantic classification, persistent caching, and note storage).
+StudyTube is an end-to-end focus and productivity system for YouTube. It decouples in-browser user interface interception from backend computation (Large Language Model inference, semantic classification, persistent caching, and note storage).
 
 ### Key Architectural Pillars:
 1. **Zero-Overhead DOM Interception**: Employs debounced MutationObservers and CSS-first filtering on YouTube's dynamic Single Page Application (Polymer/Wiz custom elements).
-2. **Client-Side Anti-Overload Queuing**: Enforces a strict FIFO classification queue in the Chrome extension so fast scrolling does not swamp local or cloud LLMs.
-3. **Multi-Tier Caching Hierarchy**: Multi-level cache (Extension In-Memory -> Service Worker Map -> Persistent SQLite 1GB LFU Cache) minimizes redundant LLM inferences to near-zero for repeating videos.
-4. **Data Minimization & Privacy-First Prompts**: LLM classifiers receive strictly isolated video titles and sanitized taxonomy instructions; raw URLs, channel metadata, user tokens, and browsing histories are strictly stripped before inference.
-5. **Zero Client Secrets**: Cloud API keys are confined exclusively to `backend/.env` and are never loaded, transmitted, or accessible to the browser client or extension scripts.
+2. **Client-Side Anti-Overload Queuing**: Enforces a strict FIFO classification queue in the Chrome extension so rapid scrolling does not swamp the local Ollama LLM.
+3. **Multi-Tier Caching Hierarchy**: Three-level cache (Extension In-Memory -> Service Worker Map -> Persistent SQLite 1GB LFU Cache) minimizes redundant LLM inferences to near-zero for repeating videos.
+4. **Data Minimization & Privacy-First Prompts**: The local LLM receives strictly isolated video titles and sanitized taxonomy instructions; raw URLs, channel metadata, user tokens, and browsing histories are stripped before inference.
+5. **Zero Client Secrets**: All credentials and backend settings are confined strictly to `backend/.env` and are never loaded, transmitted, or accessible to the browser client or extension scripts.
 
 ---
 
-## 2. High-Level Architecture Diagram
+## 2. System Architecture Diagram
 
 ```mermaid
 flowchart TB
@@ -97,16 +98,12 @@ flowchart TB
         NOTE_SVC <--> SQLITE_NOTES
     end
 
-    subgraph LLM_Tier [" LLM Classification Tier "]
-        OLLAMA[" Local Ollama <br/>• http://localhost:11434/v1<br/>• llama3.2:3b / qwen2.5<br/>• 100% Free & Private "]
-        GEMINI[" Google Gemini API <br/>• gemini-1.5-flash<br/>• REST Direct Integration "]
-        OPENAI[" OpenAI / Compatible <br/>• gpt-4o-mini / Groq / vLLM "]
-        MOCK[" Rule-Based Placeholder <br/>• Instant Offline Evaluation "]
+    subgraph LLM_Tier [" LLM Classification Engine "]
+        OLLAMA[" Local Ollama Instance <br/>• Endpoint: http://localhost:11434/v1<br/>• Model: llama3.2:3b<br/>• 100% Free, Offline & Private "]
+        FALLBACK[" Deterministic Fallback Handler <br/>• Automatic fallback on timeout or connection drop "]
 
         CLASS_SVC --> OLLAMA
-        CLASS_SVC --> GEMINI
-        CLASS_SVC --> OPENAI
-        CLASS_SVC --> MOCK
+        CLASS_SVC -.->|On Timeout / Connection Error| FALLBACK
     end
 
     SW -->|"HTTP POST /api/v1/classify"| API
@@ -124,7 +121,7 @@ The Chrome extension acts as the client-side orchestrator. It intercepts YouTube
 - **`content.js`**:
   - Injected directly into all `*://*.youtube.com/*` frames at `document_idle`.
   - Attaches a debounced `MutationObserver` to `document.documentElement` to detect newly mounted recommendation cards (`ytd-rich-item-renderer`, `ytd-video-renderer`, `ytd-compact-video-renderer`, and `yt-lockup-view-model`).
-  - Manages the **FIFO VideoClassificationQueue**: ensures only 1 card is being classified at any instant to avoid overloading consumer GPUs running local LLMs.
+  - Manages the **FIFO VideoClassificationQueue**: ensures only 1 card is being classified at any instant to avoid overloading the local Ollama LLM.
   - Injects native-looking YouTube UI elements:
     - **Watch Color Toggle**: A pill button inserted dynamically next to YouTube's native Share button.
     - **Shorts Color Toggle**: A 48x48px circular button injected into `<reel-action-bar-view-model>`.
@@ -136,23 +133,23 @@ The Chrome extension acts as the client-side orchestrator. It intercepts YouTube
     - Live chat iframe removal.
 
 - **`background.js` (Service Worker)**:
-  - Long-lived event coordinator.
+  - Event coordinator for background tasks.
   - Maintains `memoryCache` (session Map) and `inFlightRequests` Map to prevent duplicate simultaneous classifications for the same video ID.
-  - Handles **Dual-Host Network Resilience**: If `http://127.0.0.1:8000` is unreachable, it automatically attempts `http://localhost:8000`.
-  - Implements safe fallback: Returns deterministic fallback categories with `is_fallback: true` when offline or on timeouts.
+  - Handles **Dual-Host Network Resilience**: Automatically checks `http://127.0.0.1:8000` and `http://localhost:8000`.
+  - Implements safe fallback: Returns deterministic fallback categories with `is_fallback: true` on offline or timeout events.
 
 - **`bridge.js`**:
   - Injected at `document_start` on dashboard origins and local files.
-  - Acts as an isolated bridge between the web dashboard window (`window.postMessage`) and Chrome storage (`chrome.storage.local`).
+  - Bridges the web dashboard window (`window.postMessage`) and Chrome storage (`chrome.storage.local`).
 
 - **`popup.html` / `popup.js`**:
-  - Lightweight browser toolbar UI for instant toggles, quick whitelist presets (**Study Focus**, **Strict Tech**, **Allow All**, **Block All**), and backend connectivity indicator.
+  - Lightweight browser toolbar UI for instant toggles, quick whitelist presets (**Study Focus**, **Strict Tech**, **Allow All**, **Block All**), and backend connectivity status.
 
 ---
 
 ### 3.2 FastAPI Backend Microservice
 
-The backend is built with **FastAPI** (`backend/app/main.py`), utilizing asynchronous event loops for high-throughput, non-blocking I/O.
+The backend is built with **FastAPI** (`backend/app/main.py`), utilizing asynchronous event loops for non-blocking I/O.
 
 - **Routing & Endpoints**:
   - `POST /api/v1/classify`: Accepts `video_id`, `title`, `channel_name`, `url`, `views`. Validates inputs with Pydantic and returns category classifications.
@@ -168,24 +165,25 @@ The backend is built with **FastAPI** (`backend/app/main.py`), utilizing asynchr
 
 ---
 
-### 3.3 AI Classification & Intelligence Tier
+### 3.3 AI Classification Tier (Local Ollama)
 
-Classifiers inherit from an abstract base class `BaseClassifier` (`backend/app/services/classifier.py`):
+The classification pipeline is powered by a local **Ollama** instance running `llama3.2:3b`:
 
-```
-BaseClassifier (ABC)
-├── OllamaClassifier      (Local OpenAI-compatible API at http://localhost:11434/v1)
-├── GeminiClassifier      (Google Generative Language REST API)
-├── OpenAIClassifier      (Standard OpenAI API / Groq / vLLM)
-└── PlaceholderClassifier (Deterministic keyword/hash mock for offline evaluation)
-```
+- **Host Endpoint**: `http://localhost:11434/v1` (OpenAI-compatible REST interface).
+- **Active Model**: `llama3.2:3b`.
+- **Classification Engine (`backend/app/services/classifier.py`)**:
+  - Communicates directly with the local Ollama instance using HTTPX asynchronous calls.
+  - Strips video URLs, channel names, and user identifiers, sending only the sanitized video title.
+  - Uses few-shot prompt instructions demanding exactly one category slug.
+- **Deterministic Fallback Handler**:
+  - If Ollama is not started, is busy, or exceeds the timeout threshold (`15.0s`), the system resolves to a default safe category with `is_fallback: true` and `confidence: 0.1`.
+  - Fallback responses are strictly excluded from the persistent SQLite cache so videos are properly re-classified once the LLM is available.
 
 #### Taxonomy & Categories:
 Videos are classified into one of **12 granular categories**:
 `education_academics`, `programming_technology`, `career_business`, `productivity_self_improvement`, `health_fitness`, `documentaries_explainers`, `news_current_affairs`, `hobbies_creative_arts`, `gaming`, `entertainment_comedy`, `music`, `lifestyle_vlogs`.
 
 #### Prompt Isolation & Privacy Shield:
-To guarantee user privacy and minimize inference token count, prompts are stripped of personal identifiers, video URLs, and channels:
 ```text
 System: You are an expert YouTube video content classifier.
 Classify the video into EXACTLY ONE of the allowed categories:
@@ -199,7 +197,7 @@ Category:
 
 ---
 
-### 3.4 Persistent Data & Caching Tier
+### 3.4 Persistent Storage Tier (SQLite)
 
 The data tier uses two dedicated SQLite databases with WAL (Write-Ahead Logging) enabled for concurrency:
 
@@ -217,9 +215,9 @@ The data tier uses two dedicated SQLite databases with WAL (Write-Ahead Logging)
 
 ### 3.5 Reactive Web Dashboard
 
-Built with modern glassmorphism styling (`frontend/`):
+Built with glassmorphism styling (`frontend/`):
 - Pure Vanilla JavaScript (`app.js`) and modern CSS tokens (`style.css`).
-- Zero build tools or heavy node_modules needed to run.
+- Zero build tools or external node_modules needed to run.
 - Automatically served by FastAPI at `http://127.0.0.1:8000/dashboard` or directly executable from local disk via `file:///`.
 - Two Primary Views:
   1. **Focus & Distraction Shields View**: Master switch, shorts scroll blockers, comment shield toggles, 12-category interactive whitelist matrix, and interactive AI Testing Sandbox.
@@ -240,7 +238,7 @@ sequenceDiagram
     participant BG as background.js (Worker)
     participant API as FastAPI Backend
     participant DB as SQLite Cache
-    participant LLM as Active LLM (Ollama/Gemini/OpenAI)
+    participant LLM as Local Ollama (llama3.2:3b)
 
     User->>YT: Scrolls YouTube Home / Watch Recommendations
     YT->>CS: MutationObserver detects new video card
@@ -411,19 +409,19 @@ The SQLite classification cache (`backend/app/services/cache.py`) is engineered 
 
 | Threat Vector | Mitigation Strategy |
 | :--- | :--- |
-| **Exposing Cloud API Keys** | **Zero Client Secrets**: Keys (`GEMINI_API_KEY`, `OPENAI_API_KEY`) reside exclusively in server `.env` files. Extension and Dashboard client code contain zero credentials. |
-| **Browsing History Leaks** | **Prompt Sanitization**: Only the video title and category enum are transmitted to LLM providers. User cookies, session tokens, channel handles, and watch histories are never sent. |
+| **API Keys & Credentials Security** | **Zero Client Secrets**: All credentials and backend settings reside exclusively in server `.env` files. Extension and Dashboard client code contain zero credentials. |
+| **Browsing History Leaks** | **Prompt Sanitization**: Only the video title and category enum are transmitted to the LLM. User cookies, session tokens, channel handles, and watch histories are never sent. |
 | **CORS Exploitation** | **Scoped Regex Matching**: The FastAPI server allows requests originating from `chrome-extension://*` and specified local origins (`localhost:3000`, `127.0.0.1:8000`), blocking arbitrary third-party websites. |
-| **DDoS on Local LLMs** | **FIFO Request Queue**: The client-side queue throttles requests to one concurrent LLM call, shielding local Ollama instances from crash-inducing request surges during rapid scrolling. |
-| **Third-Party API Dependency** | **Offline Capability**: StudyTube functions 100% offline using the built-in `placeholder` rule classifier or local `ollama` model with zero internet dependency. |
+| **DDoS on Local LLM** | **FIFO Request Queue**: The client-side queue throttles requests to one concurrent LLM call, shielding the local Ollama instance from crash-inducing request surges during rapid scrolling. |
+| **External Service Dependency** | **100% Offline Capability**: StudyTube functions completely offline using local Ollama (`llama3.2:3b`) with zero cloud data transmission. |
 
 ---
 
-## 7. Technology Stack Summary
+## 7. Implemented Technology Stack
 
 - **Browser Extension**: Manifest V3, Vanilla JavaScript, CSS3, Chrome Storage & Message Passing APIs.
-- **Backend Framework**: Python 3.10+, FastAPI, Uvicorn (ASGI), Pydantic v2.
-- **Persistence**: SQLite 3 with Write-Ahead Logging (WAL) and Full Auto-Vacuum.
-- **LLM Integrations**: Ollama (OpenAI-compatible REST), Google Generative Language API (Gemini), OpenAI API.
+- **Backend Microservice**: Python 3.10+, FastAPI, Uvicorn (ASGI), Pydantic v2.
+- **Persistent Storage**: SQLite 3 with Write-Ahead Logging (WAL) and Full Auto-Vacuum (`classification_cache.db`, `notes.db`).
+- **Active LLM Engine**: Local Ollama (`llama3.2:3b`) via local OpenAI-compatible REST endpoint at `http://localhost:11434/v1` with automated fallback handler.
 - **Frontend Dashboard**: Glassmorphism CSS design system, Inter & Outfit typography, PostMessage bi-directional synchronization.
-- **Testing**: Pytest with Mock, Starlette TestClient, and custom fixtures.
+- **Testing**: Pytest with Mock, Starlette TestClient, and custom fixtures (46 automated tests).

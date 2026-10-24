@@ -56,7 +56,7 @@ StudyTube breaks this behavioral capture loop by:
 
 | Feature | Description |
 | :--- | :--- |
-| **🧠 Real LLM Classification** | Evaluates video titles and metadata against 12 granular categories using **Ollama** (Local GPU/CPU), **Google Gemini**, or **OpenAI**. |
+| **🧠 Real LLM Classification** | Evaluates video titles and metadata against 12 granular categories using a local **Ollama** instance (`llama3.2:3b`) with automated fallback resilience. |
 | **🚦 Sequential Classification Queue** | FIFO processing queue that sends one video at a time to local LLMs, preventing request spikes when fast-scrolling. |
 | **💾 1GB SQLite Video Cache** | Persistent SQLite cache with canonical URL indexing and view-weighted LFU eviction discarding least-viewed videos. |
 | **📝 In-Player Timestamped Notes** | Collapsible study notes drawer in YouTube Watch sidebar. Saves notes with millisecond timestamps and one-click video seek. |
@@ -127,15 +127,15 @@ StudyTube breaks this behavioral capture loop by:
 │   └─────────────────┬─────────────────┘                 └───────────────────┘   │
 └─────────────────────┼───────────────────────────────────────────────────────────┘
                       │
-     ┌────────────────┴────────────────┐
-     ▼                                 ▼
-┌────────────────────────────────┐   ┌────────────────────────────────┐
-│       LOCAL LLM (OLLAMA)       │   │       CLOUD LLM PROVIDERS      │
-│ • http://localhost:11434/v1    │   │ • Google Gemini API            │
-│ • llama3.2:3b / qwen2.5        │   │   (gemini-1.5-flash)           │
-│ • 100% Free, Offline & Private │   │ • OpenAI (gpt-4o-mini)         │
-│ • GPU Accelerated (RTX / CUDA) │   │ • Offline Rule Mock Classifier │
-└────────────────────────────────┘   └────────────────────────────────┘
+                      ▼
+┌─────────────────────────────────────────────────────────────────────────────────┐
+│                  LOCAL LLM INFERENCE ENGINE (OLLAMA)                            │
+│  • Endpoint: http://localhost:11434/v1                                          │
+│  • Active Model: llama3.2:3b                                                    │
+│  • Prompt: Title-only isolated prompt with strict category schema validation    │
+│  • Privacy: Zero cloud transmission, 100% private local execution               │
+│  • Resilience: Automated fallback classifier on timeout or connection drops     │
+└─────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -158,9 +158,9 @@ StudyTube prevents server congestion using a client-side **FIFO Classification Q
 - **Classification Pending State**: While queued, thumbnails display a minimal, modern overlay labeled `⏳ Classification pending...` instead of an abrupt blackout.
 - **Whitelist Badge Placement**: Once classified, approved videos receive a lightweight category pill badge (`.studytube-category-pill`) in the top-right corner of their thumbnail.
 
-### 3. LLM Provider Tier & Classification Taxonomy
+### 3. Local LLM Classification & Taxonomy
 
-The backend accepts classification requests at `POST /api/v1/classify`, validated against strict Pydantic models.
+The backend utilizes a local **Ollama** LLM instance (`llama3.2:3b`) running at `http://localhost:11434/v1`. Classification requests arrive at `POST /api/v1/classify`, validated against strict Pydantic models.
 
 #### Prompt Isolation & Output Sanitization
 To preserve user privacy and reduce inference latency, the classifier sends **only the sanitized title** to the LLM (raw URLs, user IDs, and channel details are stripped before inference):
