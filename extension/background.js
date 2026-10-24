@@ -202,22 +202,30 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // --- Notes Taking Message Handlers ---
   if (message.type === 'SAVE_NOTE') {
-    saveNoteToBackend(message.payload).then(sendResponse);
+    saveNoteToBackend(message.payload)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ success: false, error: err ? err.message : 'Save error' }));
     return true;
   }
 
   if (message.type === 'GET_VIDEO_NOTES') {
-    getVideoNotesFromBackend(message.videoId || message.video_id).then(sendResponse);
+    getVideoNotesFromBackend(message.videoId || message.video_id)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ success: false, notes: [], error: err ? err.message : 'Fetch error' }));
     return true;
   }
 
   if (message.type === 'GET_ALL_NOTES_GROUPED') {
-    getAllNotesGroupedFromBackend().then(sendResponse);
+    getAllNotesGroupedFromBackend()
+      .then(sendResponse)
+      .catch((err) => sendResponse({ success: false, videos: [], error: err ? err.message : 'Fetch error' }));
     return true;
   }
 
   if (message.type === 'DELETE_NOTE') {
-    deleteNoteFromBackend(message.id || message.note_id).then(sendResponse);
+    deleteNoteFromBackend(message.id || message.note_id)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ success: false, error: err ? err.message : 'Delete error' }));
     return true;
   }
 });
@@ -226,16 +234,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
  * Helper to get backend URL candidates (resolves both 127.0.0.1 and localhost)
  */
 async function getBackendCandidates() {
-  const storage = await chrome.storage.local.get(['backendUrl']);
-  const configuredUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
-  const candidates = [configuredUrl];
+  let configuredUrl = DEFAULT_BACKEND_URL;
+  try {
+    const storage = await chrome.storage.local.get(['backendUrl']);
+    if (storage && storage.backendUrl) {
+      configuredUrl = storage.backendUrl;
+    }
+  } catch (_) {}
+
+  configuredUrl = (configuredUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
+  const candidateSet = new Set([configuredUrl]);
 
   if (configuredUrl.includes('127.0.0.1')) {
-    candidates.push(configuredUrl.replace('127.0.0.1', 'localhost'));
+    candidateSet.add(configuredUrl.replace('127.0.0.1', 'localhost'));
   } else if (configuredUrl.includes('localhost')) {
-    candidates.push(configuredUrl.replace('localhost', '127.0.0.1'));
+    candidateSet.add(configuredUrl.replace('localhost', '127.0.0.1'));
   }
-  return candidates;
+
+  // Always include standard local dev endpoints as fallback
+  candidateSet.add('http://127.0.0.1:8000');
+  candidateSet.add('http://localhost:8000');
+
+  return Array.from(candidateSet);
 }
 
 async function saveNoteToBackend(payload) {

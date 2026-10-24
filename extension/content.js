@@ -1083,6 +1083,14 @@
         }
 
         chrome.runtime.sendMessage({ type: 'DELETE_NOTE', id: noteId }, (res) => {
+          if (chrome.runtime.lastError) {
+            console.warn('[StudyTube Notes] Delete error:', chrome.runtime.lastError.message);
+            if (itemEl) {
+              itemEl.style.opacity = '1';
+              itemEl.style.pointerEvents = 'auto';
+            }
+            return;
+          }
           if (res && res.success) {
             cachedVideoNotes = cachedVideoNotes.filter((x) => x.id !== noteId);
             renderNotesList(cachedVideoNotes);
@@ -1251,9 +1259,17 @@
               const errStr = chrome.runtime.lastError.message || '';
               console.warn('[StudyTube Notes] Save communication error:', errStr);
               if (statusEl) {
-                statusEl.textContent = errStr.includes('context invalidated')
-                  ? 'Extension reloaded. Please refresh tab!'
-                  : 'Backend offline or connection error';
+                const isOrphaned =
+                  errStr.includes('context invalidated') ||
+                  errStr.includes('Receiving end does not exist') ||
+                  errStr.includes('Could not establish connection') ||
+                  errStr.includes('message port closed');
+
+                if (isOrphaned) {
+                  statusEl.textContent = 'Extension reloaded. Please refresh this tab (F5)!';
+                } else {
+                  statusEl.textContent = `Extension error: ${errStr}`;
+                }
                 statusEl.className = 'studytube-note-status error';
               }
               return;
