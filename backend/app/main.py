@@ -56,7 +56,7 @@ cors_kwargs = {
 
 # 2. Allow unpacked chrome-extension:// origins during development via regex
 if settings.CORS_ALLOW_EXTENSION_REGEX:
-    cors_kwargs["allow_origin_regex"] = r"^chrome-extension://[a-z0-9]+$"
+    cors_kwargs["allow_origin_regex"] = r"^chrome-extension://.*$"
 
 app.add_middleware(CORSMiddleware, **cors_kwargs)
 

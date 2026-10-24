@@ -1246,6 +1246,19 @@
           },
           (res) => {
             if (saveBtn) saveBtn.disabled = false;
+
+            if (chrome.runtime.lastError) {
+              const errStr = chrome.runtime.lastError.message || '';
+              console.warn('[StudyTube Notes] Save communication error:', errStr);
+              if (statusEl) {
+                statusEl.textContent = errStr.includes('context invalidated')
+                  ? 'Extension reloaded. Please refresh tab!'
+                  : 'Backend offline or connection error';
+                statusEl.className = 'studytube-note-status error';
+              }
+              return;
+            }
+
             if (res && res.success && res.note) {
               if (noteInput) noteInput.value = '';
               lockedTimestampSeconds = null;

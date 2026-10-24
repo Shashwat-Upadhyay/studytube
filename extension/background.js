@@ -202,91 +202,155 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   // --- Notes Taking Message Handlers ---
   if (message.type === 'SAVE_NOTE') {
-    (async () => {
-      try {
-        const storage = await chrome.storage.local.get(['backendUrl']);
-        const backendUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
-        const res = await fetch(`${backendUrl}/api/v1/notes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify(message.payload || {}),
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.detail || `HTTP ${res.status}`);
-        }
-        const note = await res.json();
-        sendResponse({ success: true, note });
-      } catch (err) {
-        console.error('[StudyTube Background] Failed to save note:', err);
-        sendResponse({ success: false, error: err.message });
-      }
-    })();
+    saveNoteToBackend(message.payload).then(sendResponse);
     return true;
   }
 
   if (message.type === 'GET_VIDEO_NOTES') {
-    (async () => {
-      try {
-        const storage = await chrome.storage.local.get(['backendUrl']);
-        const backendUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
-        const vid = encodeURIComponent(message.videoId || message.video_id || '');
-        const res = await fetch(`${backendUrl}/api/v1/notes?video_id=${vid}`, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const notes = await res.json();
-        sendResponse({ success: true, notes });
-      } catch (err) {
-        console.error('[StudyTube Background] Failed to fetch video notes:', err);
-        sendResponse({ success: false, error: err.message, notes: [] });
-      }
-    })();
+    getVideoNotesFromBackend(message.videoId || message.video_id).then(sendResponse);
     return true;
   }
 
   if (message.type === 'GET_ALL_NOTES_GROUPED') {
-    (async () => {
-      try {
-        const storage = await chrome.storage.local.get(['backendUrl']);
-        const backendUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
-        const res = await fetch(`${backendUrl}/api/v1/notes/videos`, {
-          method: 'GET',
-          headers: { 'Accept': 'application/json' },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const videos = await res.json();
-        sendResponse({ success: true, videos });
-      } catch (err) {
-        console.error('[StudyTube Background] Failed to fetch grouped notes:', err);
-        sendResponse({ success: false, error: err.message, videos: [] });
-      }
-    })();
+    getAllNotesGroupedFromBackend().then(sendResponse);
     return true;
   }
 
   if (message.type === 'DELETE_NOTE') {
-    (async () => {
-      try {
-        const storage = await chrome.storage.local.get(['backendUrl']);
-        const backendUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
-        const noteId = message.id || message.note_id;
-        const res = await fetch(`${backendUrl}/api/v1/notes/${noteId}`, {
-          method: 'DELETE',
-          headers: { 'Accept': 'application/json' },
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const data = await res.json();
-        sendResponse({ success: true, data });
-      } catch (err) {
-        console.error('[StudyTube Background] Failed to delete note:', err);
-        sendResponse({ success: false, error: err.message });
-      }
-    })();
+    deleteNoteFromBackend(message.id || message.note_id).then(sendResponse);
     return true;
   }
 });
+
+/**
+ * Helper to get backend URL candidates (resolves both 127.0.0.1 and localhost)
+ */
+async function getBackendCandidates() {
+  const storage = await chrome.storage.local.get(['backendUrl']);
+  const configuredUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
+  const candidates = [configuredUrl];
+
+  if (configuredUrl.includes('127.0.0.1')) {
+    candidates.push(configuredUrl.replace('127.0.0.1', 'localhost'));
+  } else if (configuredUrl.includes('localhost')) {
+    candidates.push(configuredUrl.replace('localhost', '127.0.0.1'));
+  }
+  return candidates;
+}
+
+async function saveNoteToBackend(payload) {
+  const candidates = await getBackendCandidates();
+  let lastErrorMsg = 'Backend offline';
+
+  for (const baseUrl of candidates) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+      const res = await fetch(`${baseUrl}/api/v1/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify(payload || {}),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        let errData = {};
+        try { errData = await res.json(); } catch (_) {}
+        return { success: false, error: errData.detail || `HTTP error ${res.status}` };
+      }
+
+      const note = await res.json();
+      return { success: true, note };
+    } catch (err) {
+      lastErrorMsg = err.name === 'AbortError' ? 'Connection timed out' : `Cannot connect to ${baseUrl}`;
+    }
+  }
+
+  return {
+    success: false,
+    error: `${lastErrorMsg}. Please ensure StudyTube backend server is running!`,
+  };
+}
+
+async function getVideoNotesFromBackend(videoId) {
+  if (!videoId) return { success: true, notes: [] };
+  const candidates = await getBackendCandidates();
+  const vid = encodeURIComponent(videoId);
+
+  for (const baseUrl of candidates) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+      const res = await fetch(`${baseUrl}/api/v1/notes?video_id=${vid}`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const notes = await res.json();
+        return { success: true, notes };
+      }
+    } catch (_) {}
+  }
+
+  return { success: false, notes: [], error: 'Backend offline' };
+}
+
+async function getAllNotesGroupedFromBackend() {
+  const candidates = await getBackendCandidates();
+
+  for (const baseUrl of candidates) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const res = await fetch(`${baseUrl}/api/v1/notes/videos`, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const videos = await res.json();
+        return { success: true, videos };
+      }
+    } catch (_) {}
+  }
+
+  return { success: false, videos: [], error: 'Backend offline' };
+}
+
+async function deleteNoteFromBackend(noteId) {
+  if (!noteId) return { success: false, error: 'Missing note ID' };
+  const candidates = await getBackendCandidates();
+
+  for (const baseUrl of candidates) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+      const res = await fetch(`${baseUrl}/api/v1/notes/${noteId}`, {
+        method: 'DELETE',
+        headers: { 'Accept': 'application/json' },
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (res.ok) {
+        const data = await res.json();
+        return { success: true, data };
+      }
+    } catch (_) {}
+  }
+
+  return { success: false, error: 'Failed to delete note. Backend offline.' };
+}
 
 /**
  * Listen for external messages directly from web pages (via externally_connectable)
