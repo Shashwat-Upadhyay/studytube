@@ -48,9 +48,15 @@ starlette.testclient.TestClient = CustomTestClient
 fastapi.testclient.TestClient = CustomTestClient
 
 
+from app.services.cache import get_sqlite_cache
+
+
 @pytest.fixture(autouse=True)
 def reset_classifier_state():
-    """Reset the classifier singleton state before each test to guarantee test isolation."""
+    """Reset the classifier singleton and SQLite cache state before each test to guarantee test isolation."""
     set_classifier(PlaceholderClassifier())
+    cache = get_sqlite_cache()
+    cache.clear()
     yield
+    cache.clear()
     set_classifier(None)

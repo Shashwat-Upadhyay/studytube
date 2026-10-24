@@ -1,6 +1,6 @@
 """Pydantic schemas for video classification requests and responses."""
 
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
 # Standard StudyTube categories per specification
@@ -58,6 +58,12 @@ class ClassificationRequest(BaseModel):
         description="Full URL of the YouTube video.",
         examples=["https://www.youtube.com/watch?v=example123"],
     )
+    views: Optional[int] = Field(
+        default=0,
+        ge=0,
+        description="View count of the video.",
+        examples=[125000],
+    )
 
     @field_validator("video_id")
     @classmethod
@@ -83,6 +89,21 @@ class ClassificationRequest(BaseModel):
             return stripped if stripped else None
         return None
 
+    @field_validator("views", mode="before")
+    @classmethod
+    def validate_views(cls, v: Optional[Union[int, float, str]]) -> int:
+        if v is None:
+            return 0
+        if isinstance(v, (int, float)):
+            return max(0, int(v))
+        if isinstance(v, str):
+            clean = v.strip().replace(",", "").replace(" ", "")
+            try:
+                return max(0, int(float(clean)))
+            except (ValueError, TypeError):
+                return 0
+        return 0
+
     model_config = ConfigDict(
         str_strip_whitespace=True,
         json_schema_extra={
@@ -91,6 +112,7 @@ class ClassificationRequest(BaseModel):
                 "title": "Introduction to Machine Learning",
                 "channel_name": "Example Learning",
                 "url": "https://www.youtube.com/watch?v=example123",
+                "views": 150000,
             }
         },
     )

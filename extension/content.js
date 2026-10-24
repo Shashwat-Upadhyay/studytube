@@ -461,6 +461,19 @@
   /**
    * Extract video ID, Title, and Channel Name from a card
    */
+  function parseViewsCount(str) {
+    if (!str) return 0;
+    const match = str.match(/([\d,.]+)\s*([KMBkmb]?)\s*(?:views|visualizaciones|vues|Aufrufe)?/i);
+    if (!match) return 0;
+    const rawNum = parseFloat(match[1].replace(/,/g, ''));
+    if (isNaN(rawNum)) return 0;
+    const multiplier = (match[2] || '').toUpperCase();
+    if (multiplier === 'K') return Math.round(rawNum * 1000);
+    if (multiplier === 'M') return Math.round(rawNum * 1000000);
+    if (multiplier === 'B') return Math.round(rawNum * 1000000000);
+    return Math.round(rawNum);
+  }
+
   function extractCardMetadata(card) {
     const link = card.querySelector('a[href*="/watch?v="], a[href*="/shorts/"]');
     if (!link) return null;
@@ -490,11 +503,27 @@
       channelName = (channelEl.textContent || '').trim();
     }
 
+    // View count extraction for SQLite LFU cache prioritization
+    let views = 0;
+    const metaSpans = card.querySelectorAll('#metadata-line span, span.inline-metadata-item');
+    for (const span of metaSpans) {
+      const text = (span.textContent || '').trim();
+      if (text.toLowerCase().includes('view') || text.match(/[\d,.]+\s*(?:K|M|B)?\s*views?/i)) {
+        views = parseViewsCount(text);
+        if (views > 0) break;
+      }
+    }
+    if (views === 0) {
+      const aria = card.getAttribute('aria-label') || link.getAttribute('aria-label') || '';
+      views = parseViewsCount(aria);
+    }
+
     return {
       video_id: videoId,
       title: title || `YouTube Video ${videoId}`,
       channel_name: channelName || null,
       url: link.href,
+      views: views || 0,
     };
   }
 
@@ -684,6 +713,7 @@
             title: task.title,
             channel_name: task.channelName,
             url: task.url,
+            views: task.views || 0,
           },
         },
         (response) => {
@@ -790,6 +820,7 @@
       title: meta.title,
       channelName: meta.channel_name,
       url: meta.url,
+      views: meta.views || 0,
     });
 
     processClassificationQueue();

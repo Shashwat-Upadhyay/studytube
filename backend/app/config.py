@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     LLM_TIMEOUT_SECONDS: float = 5.0
     LLM_FALLBACK_DEFAULT: str = "gaming"
     CACHE_SIZE: int = 1000
+    # SQLite Database Cache Configuration (1GB default max size)
+    SQLITE_CACHE_DB_PATH: str = str(_BACKEND_DIR / "data" / "classification_cache.db")
+    SQLITE_CACHE_MAX_BYTES: int = 1 * 1024 * 1024 * 1024  # 1 GB in bytes
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

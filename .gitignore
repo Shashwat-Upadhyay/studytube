@@ -3,6 +3,14 @@
 *.env
 !.env.example
 
+# SQLite Databases & Cache
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+backend/data/
+
 # Python
 __pycache__/
 *.py[cod]

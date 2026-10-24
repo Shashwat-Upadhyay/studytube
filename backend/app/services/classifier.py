@@ -23,11 +23,12 @@ from app.schemas.video import (
     ClassificationRequest,
     ClassificationResponse,
 )
+from app.services.cache import get_sqlite_cache
 
 logger = logging.getLogger("studytube-classifier")
 
 SYSTEM_PROMPT = f"""You are an expert YouTube video classifier for the StudyTube focus application.
-Analyze the provided YouTube video metadata (title, channel name, URL) and classify it into EXACTLY ONE category from this list:
+Analyze the provided YouTube video title according to these instructions, and classify it into EXACTLY ONE category from this list:
 {", ".join(ALLOWED_CATEGORIES)}
 
 Category Definitions:
@@ -109,33 +110,76 @@ class BaseClassifier(ABC):
         self._in_flight: Dict[str, asyncio.Future] = {}
         self._cache_size = cache_size
         self._lock = asyncio.Lock()
+        self._sqlite_cache = get_sqlite_cache()
 
     def get_cached(self, video_id: str) -> Optional[ClassificationResponse]:
-        """Retrieve a genuine cached response if present."""
+        """Retrieve a genuine in-memory LRU cached response if present."""
         if video_id in self._cache:
             self._cache.move_to_end(video_id)
             return self._cache[video_id]
         return None
 
-    def put_cache(self, video_id: str, response: ClassificationResponse) -> None:
-        """Store valid response in cache, strictly omitting fallback responses."""
+    def put_cache(
+        self,
+        video_id: str,
+        response: ClassificationResponse,
+        url: Optional[str] = None,
+        views: int = 0,
+    ) -> None:
+        """Store valid response in memory and SQLite cache, strictly omitting fallback responses."""
         if response.is_fallback:
             return
         if len(self._cache) >= self._cache_size:
             self._cache.popitem(last=False)
         self._cache[video_id] = response
+        try:
+            self._sqlite_cache.set(
+                url=url,
+                video_id=video_id,
+                classification=response.category,
+                views=views,
+                confidence=response.confidence,
+                classifier=response.classifier,
+                suggested_mode=response.suggested_mode,
+            )
+        except Exception as exc:
+            logger.warning("Failed to save to SQLite cache: %s", exc)
 
     async def classify(self, request: ClassificationRequest) -> ClassificationResponse:
-        """Classify video metadata with deduplication and caching."""
-        cached = self.get_cached(request.video_id)
-        if cached:
-            return cached
+        """Classify video metadata with deduplication and persistent SQLite caching."""
+        # 1. Check in-memory LRU cache
+        if request.video_id in self._cache:
+            self._cache.move_to_end(request.video_id)
+            return self._cache[request.video_id]
 
-        # Deduplicate concurrent requests for identical video_id
+        # 2. Check persistent SQLite cache (updating views if newer count is higher)
+        sqlite_cached = self._sqlite_cache.get(
+            url=request.url,
+            video_id=request.video_id,
+            views=request.views,
+        )
+        if sqlite_cached:
+            if len(self._cache) >= self._cache_size:
+                self._cache.popitem(last=False)
+            self._cache[request.video_id] = sqlite_cached
+            return sqlite_cached
+
+        # 3. Deduplicate concurrent requests for identical video_id
         async with self._lock:
-            cached = self.get_cached(request.video_id)
-            if cached:
-                return cached
+            if request.video_id in self._cache:
+                self._cache.move_to_end(request.video_id)
+                return self._cache[request.video_id]
+
+            sqlite_cached = self._sqlite_cache.get(
+                url=request.url,
+                video_id=request.video_id,
+                views=request.views,
+            )
+            if sqlite_cached:
+                if len(self._cache) >= self._cache_size:
+                    self._cache.popitem(last=False)
+                self._cache[request.video_id] = sqlite_cached
+                return sqlite_cached
 
             if request.video_id in self._in_flight:
                 future = self._in_flight[request.video_id]
@@ -152,7 +196,12 @@ class BaseClassifier(ABC):
         try:
             response = await self._classify_impl(request)
             if not response.is_fallback:
-                self.put_cache(request.video_id, response)
+                self.put_cache(
+                    video_id=request.video_id,
+                    response=response,
+                    url=request.url,
+                    views=request.views or 0,
+                )
             if not future.done():
                 future.set_result(response)
         except Exception as exc:
@@ -211,12 +260,8 @@ class GeminiClassifier(BaseClassifier):
         if not self.api_key:
             return _create_fallback_response(request.video_id, self.provider_name, "API key not configured in .env")
 
-        user_content = (
-            f"Video Title: {request.title}\n"
-            f"Channel Name: {request.channel_name or 'Not provided'}\n"
-            f"URL: {request.url or 'Not provided'}\n"
-            f"Video ID: {request.video_id}"
-        )
+        # Send only title and instructions to LLM (no URL or views per specification)
+        user_content = f"Video Title: {request.title}"
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent?key={self.api_key}"
         payload = {
@@ -346,12 +391,8 @@ class OpenAIClassifier(BaseClassifier):
         if not self.api_key and "localhost" not in self.base_url and "127.0.0.1" not in self.base_url:
             return _create_fallback_response(request.video_id, self.provider_name, "API key not configured in .env")
 
-        user_content = (
-            f"Video Title: {request.title}\n"
-            f"Channel Name: {request.channel_name or 'Not provided'}\n"
-            f"URL: {request.url or 'Not provided'}\n"
-            f"Video ID: {request.video_id}"
-        )
+        # Send only title and instructions to LLM (no URL or views per specification)
+        user_content = f"Video Title: {request.title}"
 
         headers = {
             "Content-Type": "application/json",

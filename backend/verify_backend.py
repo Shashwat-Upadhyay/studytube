@@ -50,7 +50,8 @@ def verify():
         "video_id": "dQw4w9WgXcQ",
         "title": "Never Gonna Give You Up",
         "channel_name": "Rick Astley",
-        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+        "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+        "views": 1400000000,
     }
     resp = client.post("/api/v1/classify", json=payload)
     assert resp.status_code == 200, f"Classify failed: {resp.status_code}"

@@ -95,6 +95,7 @@ async function classifyVideo(payload) {
           title: (title || '').slice(0, 500) || `YouTube Video ${video_id}`,
           channel_name: channel_name ? channel_name.slice(0, 255) : null,
           url: url ? url.slice(0, 2048) : null,
+          views: typeof payload.views === 'number' ? payload.views : (parseInt(payload.views, 10) || 0),
         }),
         signal: controller.signal,
       });

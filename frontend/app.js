@@ -521,6 +521,7 @@ async function runClassifierTest(inputTitle) {
         title: inputTitle.trim(),
         channel_name: 'Sandbox Demo Channel',
         url: inputTitle.startsWith('http') ? inputTitle.trim() : null,
+        views: 50000,
       }),
     });
 
