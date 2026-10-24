@@ -7,7 +7,6 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from pathlib import Path
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
-_ROOT_DIR = _BACKEND_DIR.parent
 
 class Settings(BaseSettings):
     """Central configuration for StudyTube backend."""
@@ -59,7 +58,7 @@ class Settings(BaseSettings):
         return []
 
     model_config = SettingsConfigDict(
-        env_file=(str(_BACKEND_DIR / ".env"), str(_ROOT_DIR / ".env"), ".env"),
+        env_file=(str(_BACKEND_DIR / ".env"), ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
         case_sensitive=True,
