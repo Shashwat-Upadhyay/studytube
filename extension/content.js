@@ -947,6 +947,381 @@
     }
   }
 
+  // --- Notes Taking In-Page UI ---
+  let activeNotesVideoId = null;
+  let cachedVideoNotes = [];
+  let notesPanelCollapsed = false;
+  let lockedTimestampSeconds = null;
+
+  function formatTime(sec) {
+    const s = Math.max(0, Math.floor(sec || 0));
+    const hrs = Math.floor(s / 3600);
+    const mins = Math.floor((s % 3600) / 60);
+    const secs = s % 60;
+    if (hrs > 0) {
+      return `${hrs}:${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+    }
+    return `${mins < 10 ? '0' : ''}${mins}:${secs < 10 ? '0' : ''}${secs}`;
+  }
+
+  function getActivePlayerVideo() {
+    return document.querySelector('#movie_player video') || document.querySelector('video');
+  }
+
+  function escapeHTML(str) {
+    return (str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function fetchAndRenderNotesForCurrentVideo(force = false) {
+    const vid = currentVideoId || getVideoId(location.href);
+    if (!vid) return;
+
+    if (!force && activeNotesVideoId === vid && cachedVideoNotes.length > 0) {
+      renderNotesList(cachedVideoNotes);
+      return;
+    }
+
+    activeNotesVideoId = vid;
+    try {
+      chrome.runtime.sendMessage(
+        { type: 'GET_VIDEO_NOTES', videoId: vid },
+        (res) => {
+          if (chrome.runtime.lastError) {
+            console.debug('[StudyTube Notes] Background connection:', chrome.runtime.lastError.message);
+            return;
+          }
+          if (res && res.success && Array.isArray(res.notes)) {
+            cachedVideoNotes = res.notes;
+            renderNotesList(cachedVideoNotes);
+          }
+        }
+      );
+    } catch (_) {}
+  }
+
+  function renderNotesList(notes) {
+    const listEl = document.getElementById('studytubeNotesList');
+    const badgeEl = document.getElementById('studytubeNotesCountBadge');
+    if (!listEl) return;
+
+    if (badgeEl) {
+      const count = (notes || []).length;
+      badgeEl.textContent = count === 1 ? '1 note' : `${count} notes`;
+    }
+
+    if (!notes || notes.length === 0) {
+      listEl.innerHTML = `
+        <div class="studytube-notes-empty">
+          <div class="studytube-empty-icon">📝</div>
+          <div class="studytube-empty-text">No notes yet for this video</div>
+          <div class="studytube-empty-sub">Type above to save your first timestamped note!</div>
+        </div>
+      `;
+      return;
+    }
+
+    // Sort by timestamp_seconds ascending
+    const sorted = [...notes].sort((a, b) => (a.timestamp_seconds || 0) - (b.timestamp_seconds || 0));
+
+    listEl.innerHTML = sorted.map((n) => `
+      <div class="studytube-note-item" data-id="${n.id}">
+        <div class="studytube-note-item-header">
+          <button type="button" class="studytube-seek-btn" data-seconds="${n.timestamp_seconds}" title="Jump video to ${escapeHTML(n.timestamp_formatted)}">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>${escapeHTML(n.timestamp_formatted)}</span>
+          </button>
+          <div class="studytube-note-item-meta">
+            <button type="button" class="studytube-delete-note-btn" data-id="${n.id}" title="Delete note">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="studytube-note-content">${escapeHTML(n.content)}</div>
+      </div>
+    `).join('');
+
+    // Attach click listeners for seeking video
+    listEl.querySelectorAll('.studytube-seek-btn').forEach((btn) => {
+      btn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const sec = parseFloat(btn.dataset.seconds || '0');
+        const v = getActivePlayerVideo();
+        if (v) {
+          v.currentTime = sec;
+          try { v.play(); } catch (_) {}
+          const player = document.querySelector('#movie_player') || v;
+          if (player && typeof player.scrollIntoView === 'function') {
+            player.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        }
+      };
+    });
+
+    // Attach delete listeners
+    listEl.querySelectorAll('.studytube-delete-note-btn').forEach((btn) => {
+      btn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const noteId = parseInt(btn.dataset.id, 10);
+        if (!noteId) return;
+
+        const itemEl = btn.closest('.studytube-note-item');
+        if (itemEl) {
+          itemEl.style.opacity = '0.4';
+          itemEl.style.pointerEvents = 'none';
+        }
+
+        chrome.runtime.sendMessage({ type: 'DELETE_NOTE', id: noteId }, (res) => {
+          if (res && res.success) {
+            cachedVideoNotes = cachedVideoNotes.filter((x) => x.id !== noteId);
+            renderNotesList(cachedVideoNotes);
+          } else {
+            if (itemEl) {
+              itemEl.style.opacity = '1';
+              itemEl.style.pointerEvents = 'auto';
+            }
+          }
+        });
+      };
+    });
+  }
+
+  function syncNotesPanel() {
+    if (!isWatchPage()) {
+      const existing = document.getElementById('studytube-notes-panel');
+      if (existing) existing.remove();
+      return;
+    }
+
+    // Secondary column beside video during non-maximise standard playback
+    const secondaryInner =
+      document.querySelector('#secondary #secondary-inner') ||
+      document.querySelector('#secondary') ||
+      document.querySelector('ytd-watch-flexy #columns #secondary');
+
+    if (!secondaryInner) return;
+
+    let panel = document.getElementById('studytube-notes-panel');
+    if (!panel) {
+      panel = document.createElement('div');
+      panel.id = 'studytube-notes-panel';
+      panel.className = 'studytube-notes-panel';
+
+      panel.innerHTML = `
+        <div class="studytube-notes-header">
+          <div class="studytube-notes-title-group">
+            <div class="studytube-notes-logo">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+              </svg>
+            </div>
+            <span class="studytube-notes-title">Study Notes</span>
+            <span class="studytube-notes-count-badge" id="studytubeNotesCountBadge">0 notes</span>
+          </div>
+          <div class="studytube-notes-header-actions">
+            <a href="http://127.0.0.1:8000/dashboard#notes" target="_blank" class="studytube-notes-tool-btn" title="Open StudyTube Notebook in Web Dashboard">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+            <button type="button" class="studytube-notes-tool-btn" id="studytubeNotesCollapseBtn" title="Toggle Notes Panel">
+              <svg class="studytube-collapse-svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="studytube-notes-body" id="studytubeNotesBody">
+          <div class="studytube-composer-card">
+            <div class="studytube-composer-row">
+              <button type="button" class="studytube-timestamp-chip" id="studytubeTimestampChip" title="Click to lock/unlock current timestamp">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span id="studytubeTsDisplay">00:00</span>
+              </button>
+              <span class="studytube-ts-hint" id="studytubeTsHint">Live video time</span>
+            </div>
+
+            <textarea id="studytubeNoteInput" class="studytube-note-input" rows="2" placeholder="Take a note at this timestamp... (Enter to save, Shift+Enter for newline)"></textarea>
+
+            <div class="studytube-composer-actions">
+              <span class="studytube-note-status" id="studytubeNoteStatus"></span>
+              <button type="button" class="studytube-save-note-btn" id="studytubeSaveNoteBtn">
+                Save Note
+              </button>
+            </div>
+          </div>
+
+          <div class="studytube-notes-list" id="studytubeNotesList">
+            <!-- Notes list rendered here -->
+          </div>
+        </div>
+      `;
+
+      // Setup collapse toggle
+      const collapseBtn = panel.querySelector('#studytubeNotesCollapseBtn');
+      if (collapseBtn) {
+        collapseBtn.onclick = (e) => {
+          e.preventDefault();
+          notesPanelCollapsed = !notesPanelCollapsed;
+          panel.classList.toggle('is-collapsed', notesPanelCollapsed);
+        };
+      }
+
+      // Timestamp chip click to toggle lock
+      const tsChip = panel.querySelector('#studytubeTimestampChip');
+      const tsHint = panel.querySelector('#studytubeTsHint');
+      if (tsChip) {
+        tsChip.onclick = (e) => {
+          e.preventDefault();
+          const v = getActivePlayerVideo();
+          if (lockedTimestampSeconds !== null) {
+            lockedTimestampSeconds = null;
+            tsChip.classList.remove('is-locked');
+            if (tsHint) tsHint.textContent = 'Live video time';
+          } else {
+            lockedTimestampSeconds = v ? Math.floor(v.currentTime) : 0;
+            tsChip.classList.add('is-locked');
+            if (tsHint) tsHint.textContent = 'Timestamp locked';
+          }
+        };
+      }
+
+      // Save Note logic
+      const saveBtn = panel.querySelector('#studytubeSaveNoteBtn');
+      const noteInput = panel.querySelector('#studytubeNoteInput');
+      const statusEl = panel.querySelector('#studytubeNoteStatus');
+
+      const handleSave = async () => {
+        const text = (noteInput ? noteInput.value : '').trim();
+        if (!text) {
+          if (noteInput) noteInput.focus();
+          return;
+        }
+
+        const v = getActivePlayerVideo();
+        const currentSec = lockedTimestampSeconds !== null
+          ? lockedTimestampSeconds
+          : (v ? Math.floor(v.currentTime) : 0);
+
+        const currentUrl = location.href;
+        let videoTitle = document.title ? document.title.replace(/ - YouTube$/, '').trim() : '';
+        const titleEl = document.querySelector('h1.ytd-watch-metadata') || document.querySelector('#title h1');
+        if (titleEl && titleEl.textContent) {
+          videoTitle = titleEl.textContent.trim();
+        }
+
+        if (statusEl) {
+          statusEl.textContent = 'Saving...';
+          statusEl.className = 'studytube-note-status saving';
+        }
+        if (saveBtn) saveBtn.disabled = true;
+
+        chrome.runtime.sendMessage(
+          {
+            type: 'SAVE_NOTE',
+            payload: {
+              url: currentUrl,
+              timestamp: currentSec,
+              content: text,
+              title: videoTitle || null,
+            },
+          },
+          (res) => {
+            if (saveBtn) saveBtn.disabled = false;
+            if (res && res.success && res.note) {
+              if (noteInput) noteInput.value = '';
+              lockedTimestampSeconds = null;
+              if (tsChip) tsChip.classList.remove('is-locked');
+              if (tsHint) tsHint.textContent = 'Live video time';
+
+              if (statusEl) {
+                statusEl.textContent = 'Saved!';
+                statusEl.className = 'studytube-note-status saved';
+                setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2500);
+              }
+
+              // Update cached notes
+              cachedVideoNotes.push(res.note);
+              renderNotesList(cachedVideoNotes);
+            } else {
+              if (statusEl) {
+                statusEl.textContent = (res && res.error) || 'Failed to save';
+                statusEl.className = 'studytube-note-status error';
+              }
+            }
+          }
+        );
+      };
+
+      if (saveBtn) {
+        saveBtn.onclick = (e) => {
+          e.preventDefault();
+          handleSave();
+        };
+      }
+
+      if (noteInput) {
+        noteInput.onkeydown = (e) => {
+          if (e.key === 'Enter' && !e.shiftKey) {
+            e.preventDefault();
+            handleSave();
+          }
+        };
+      }
+    }
+
+    // Insert at top of secondary column
+    if (secondaryInner.firstChild) {
+      if (panel.parentElement !== secondaryInner || panel !== secondaryInner.firstChild) {
+        secondaryInner.insertBefore(panel, secondaryInner.firstChild);
+      }
+    } else {
+      if (panel.parentElement !== secondaryInner) {
+        secondaryInner.appendChild(panel);
+      }
+    }
+
+    // Refresh notes if video changed
+    const vid = currentVideoId || getVideoId(location.href);
+    if (vid && vid !== activeNotesVideoId) {
+      fetchAndRenderNotesForCurrentVideo(true);
+    }
+  }
+
+  // Periodic ticker for live timestamp display
+  setInterval(() => {
+    if (!isWatchPage()) return;
+    const tsDisplay = document.getElementById('studytubeTsDisplay');
+    if (!tsDisplay) return;
+
+    if (lockedTimestampSeconds !== null) {
+      tsDisplay.textContent = formatTime(lockedTimestampSeconds);
+    } else {
+      const v = getActivePlayerVideo();
+      if (v && !isNaN(v.currentTime)) {
+        tsDisplay.textContent = formatTime(v.currentTime);
+      }
+    }
+  }, 400);
+
   /**
    * Check if an element is a genuine Shorts action bar (Wiz or Polymer)
    */
@@ -1240,9 +1615,12 @@
 
     if (isWatchPage()) {
       syncColorToggleButton();
+      syncNotesPanel();
     } else {
       const existing = document.querySelector('.studytube-color-toggle');
       if (existing) existing.remove();
+      const existingNotes = document.getElementById('studytube-notes-panel');
+      if (existingNotes) existingNotes.remove();
     }
 
     if (isShortsPage()) {
@@ -1266,6 +1644,7 @@
       colorOverrideVideoId = null;
       commentsTemporarilyRevealed = false;
       try { chrome.storage.local.remove(COLOR_OVERRIDE_KEY); } catch (_) {}
+      fetchAndRenderNotesForCurrentVideo(true);
     }
 
     syncWatchPageState();

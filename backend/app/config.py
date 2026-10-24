@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     # SQLite Database Cache Configuration (1GB default max size)
     SQLITE_CACHE_DB_PATH: str = str(_BACKEND_DIR / "data" / "classification_cache.db")
     SQLITE_CACHE_MAX_BYTES: int = 1 * 1024 * 1024 * 1024  # 1 GB in bytes
+    # SQLite Notes Database Configuration
+    SQLITE_NOTES_DB_PATH: str = str(_BACKEND_DIR / "data" / "notes.db")
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

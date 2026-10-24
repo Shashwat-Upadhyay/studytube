@@ -646,11 +646,504 @@ function initEventListeners() {
   });
 }
 
+// ==========================================================================
+// Video Notes Notebook Controller
+// ==========================================================================
+
+let videoNotesGroups = [];
+let currentSelectedVideo = null;
+let notesSearchTerm = '';
+
+function escapeHTML(str) {
+  return (str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function switchViewTab(tabTarget) {
+  const tabShieldsBtn = document.getElementById('tabShieldsBtn');
+  const tabNotesBtn = document.getElementById('tabNotesBtn');
+  const shieldsView = document.getElementById('shieldsView');
+  const notesView = document.getElementById('notesView');
+
+  if (tabTarget === 'notesView' || tabTarget === 'notes') {
+    if (tabShieldsBtn) tabShieldsBtn.classList.remove('active');
+    if (tabNotesBtn) tabNotesBtn.classList.add('active');
+    if (shieldsView) shieldsView.classList.add('hidden');
+    if (notesView) notesView.classList.remove('hidden');
+    window.location.hash = 'notes';
+    loadVideoNotes();
+  } else {
+    if (tabNotesBtn) tabNotesBtn.classList.remove('active');
+    if (tabShieldsBtn) tabShieldsBtn.classList.add('active');
+    if (notesView) notesView.classList.add('hidden');
+    if (shieldsView) shieldsView.classList.remove('hidden');
+    if (window.location.hash === '#notes') {
+      history.replaceState(null, null, window.location.pathname);
+    }
+  }
+}
+
+async function loadVideoNotes() {
+  const gridEl = document.getElementById('videoNotesGrid');
+  const emptyEl = document.getElementById('videoNotesEmptyState');
+  const statVideosEl = document.getElementById('statTotalVideos');
+  const statNotesEl = document.getElementById('statTotalNotes');
+  const tabBadgeEl = document.getElementById('globalNotesCountBadge');
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/notes/videos`, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+    });
+
+    if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+    videoNotesGroups = await res.json();
+
+    // Calculate total notes
+    const totalNotes = videoNotesGroups.reduce((acc, g) => acc + (g.notes_count || 0), 0);
+
+    if (statVideosEl) statVideosEl.textContent = videoNotesGroups.length;
+    if (statNotesEl) statNotesEl.textContent = totalNotes;
+    if (tabBadgeEl) tabBadgeEl.textContent = totalNotes;
+
+    renderVideoNotesGrid();
+  } catch (err) {
+    console.warn('[StudyTube Dashboard] Failed to load notes:', err);
+    if (gridEl) gridEl.innerHTML = `<div class="error-box">Failed to load video notes: ${escapeHTML(err.message)}</div>`;
+  }
+}
+
+function renderVideoNotesGrid() {
+  const gridEl = document.getElementById('videoNotesGrid');
+  const emptyEl = document.getElementById('videoNotesEmptyState');
+  if (!gridEl) return;
+
+  const filtered = (videoNotesGroups || []).filter((group) => {
+    if (!notesSearchTerm) return true;
+    const term = notesSearchTerm.toLowerCase();
+    const matchTitle = (group.video_title || '').toLowerCase().includes(term);
+    const matchId = (group.video_id || '').toLowerCase().includes(term);
+    const matchNotes = (group.notes || []).some((n) => (n.content || '').toLowerCase().includes(term));
+    return matchTitle || matchId || matchNotes;
+  });
+
+  if (filtered.length === 0) {
+    gridEl.innerHTML = '';
+    if (emptyEl) emptyEl.classList.remove('hidden');
+    return;
+  }
+
+  if (emptyEl) emptyEl.classList.add('hidden');
+
+  gridEl.innerHTML = filtered.map((group) => {
+    const latestNote = group.notes && group.notes.length > 0
+      ? group.notes[group.notes.length - 1]
+      : null;
+    const snippetText = latestNote
+      ? `⏱️ ${latestNote.timestamp_formatted}: ${latestNote.content}`
+      : 'Click to open notes notebook for this video...';
+
+    return `
+      <div class="video-notes-card" data-video-id="${group.video_id}">
+        <div class="video-card-thumb-wrap">
+          <img class="video-card-thumb" src="${escapeHTML(group.thumbnail_url)}" alt="${escapeHTML(group.video_title)}" loading="lazy">
+          <div class="video-card-notes-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M12 20h9"></path>
+              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+            <span>${group.notes_count} Note${group.notes_count === 1 ? '' : 's'}</span>
+          </div>
+        </div>
+        <div class="video-card-body">
+          <h3 class="video-card-title" title="${escapeHTML(group.video_title)}">${escapeHTML(group.video_title)}</h3>
+          <div class="video-card-snippet" title="${escapeHTML(snippetText)}">${escapeHTML(snippetText)}</div>
+          <div class="video-card-actions">
+            <button type="button" class="btn-open-notes">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+              </svg>
+              View Notes Window
+            </button>
+            <a href="${escapeHTML(group.video_url)}" target="_blank" class="btn-open-yt" title="Watch on YouTube" onclick="event.stopPropagation()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                <polyline points="15 3 21 3 21 9"></polyline>
+                <line x1="10" y1="14" x2="21" y2="3"></line>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  // Attach card click handlers to open notes window
+  gridEl.querySelectorAll('.video-notes-card').forEach((card) => {
+    card.addEventListener('click', () => {
+      const vid = card.getAttribute('data-video-id');
+      const grp = videoNotesGroups.find((g) => g.video_id === vid);
+      if (grp) openNotesWindow(grp);
+    });
+  });
+}
+
+function openNotesWindow(group) {
+  currentSelectedVideo = group;
+  const modal = document.getElementById('notesWindowModal');
+  const thumbEl = document.getElementById('windowVideoThumb');
+  const titleEl = document.getElementById('notesWindowTitle');
+  const badgeEl = document.getElementById('windowNotesCountBadge');
+  const ytLink = document.getElementById('windowYtLink');
+  const openDirectBtn = document.getElementById('windowOpenYtDirectBtn');
+
+  if (!modal) return;
+
+  if (thumbEl) thumbEl.src = group.thumbnail_url;
+  if (titleEl) titleEl.textContent = group.video_title;
+  if (badgeEl) badgeEl.textContent = `${group.notes_count} Note${group.notes_count === 1 ? '' : 's'}`;
+  if (ytLink) ytLink.href = group.video_url;
+  if (openDirectBtn) {
+    openDirectBtn.onclick = () => window.open(group.video_url, '_blank');
+  }
+
+  renderNotesWindowList();
+  modal.classList.remove('hidden');
+}
+
+function closeNotesWindow() {
+  const modal = document.getElementById('notesWindowModal');
+  if (modal) modal.classList.add('hidden');
+  currentSelectedVideo = null;
+}
+
+function renderNotesWindowList() {
+  const listEl = document.getElementById('windowNotesList');
+  const badgeEl = document.getElementById('windowNotesCountBadge');
+  if (!listEl || !currentSelectedVideo) return;
+
+  const notes = currentSelectedVideo.notes || [];
+  if (badgeEl) badgeEl.textContent = `${notes.length} Note${notes.length === 1 ? '' : 's'}`;
+
+  if (notes.length === 0) {
+    listEl.innerHTML = `
+      <div class="notes-empty-state" style="padding: 30px;">
+        <div class="empty-state-art" style="font-size: 32px;">📝</div>
+        <div class="empty-state-title" style="font-size: 15px;">No notes yet for this video</div>
+        <div class="empty-state-desc" style="font-size: 13px;">Use the form above to add your first timestamped note!</div>
+      </div>
+    `;
+    return;
+  }
+
+  // Sort notes by timestamp ascending
+  const sorted = [...notes].sort((a, b) => (a.timestamp_seconds || 0) - (b.timestamp_seconds || 0));
+
+  listEl.innerHTML = sorted.map((n) => {
+    const timestampSec = Math.floor(n.timestamp_seconds || 0);
+    const jumpUrl = `https://www.youtube.com/watch?v=${currentSelectedVideo.video_id}&t=${timestampSec}s`;
+    let formattedDate = '';
+    try {
+      formattedDate = new Date(n.created_at).toLocaleDateString(undefined, {
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+    } catch (_) {}
+
+    return `
+      <div class="window-note-item" data-note-id="${n.id}">
+        <div class="window-note-item-header">
+          <a href="${jumpUrl}" target="_blank" class="window-seek-link" title="Click to jump to ${escapeHTML(n.timestamp_formatted)} on YouTube">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            <span>${escapeHTML(n.timestamp_formatted)}</span>
+          </a>
+          <div class="window-note-meta-right">
+            <span class="window-note-date">${formattedDate}</span>
+            <button type="button" class="window-delete-note-btn" data-id="${n.id}" title="Delete this note">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="window-note-content-text">${escapeHTML(n.content)}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Attach delete handlers inside window
+  listEl.querySelectorAll('.window-delete-note-btn').forEach((btn) => {
+    btn.onclick = async (e) => {
+      e.preventDefault();
+      const noteId = parseInt(btn.getAttribute('data-id'), 10);
+      if (!noteId) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/notes/${noteId}`, {
+          method: 'DELETE',
+          headers: { 'Accept': 'application/json' },
+        });
+
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        // Update local state
+        currentSelectedVideo.notes = (currentSelectedVideo.notes || []).filter((x) => x.id !== noteId);
+        currentSelectedVideo.notes_count = currentSelectedVideo.notes.length;
+
+        // If no notes left in this video group, refresh all
+        if (currentSelectedVideo.notes.length === 0) {
+          videoNotesGroups = videoNotesGroups.filter((g) => g.video_id !== currentSelectedVideo.video_id);
+        } else {
+          const groupIdx = videoNotesGroups.findIndex((g) => g.video_id === currentSelectedVideo.video_id);
+          if (groupIdx !== -1) {
+            videoNotesGroups[groupIdx] = { ...currentSelectedVideo };
+          }
+        }
+
+        renderNotesWindowList();
+        renderVideoNotesGrid();
+        showToast('Note deleted successfully.');
+      } catch (err) {
+        alert(`Failed to delete note: ${err.message}`);
+      }
+    };
+  });
+}
+
+function openCreateNoteModal() {
+  const modal = document.getElementById('createNoteModal');
+  if (modal) {
+    modal.classList.remove('hidden');
+    const input = document.getElementById('globalNoteUrl');
+    if (input) input.focus();
+  }
+}
+
+function closeCreateNoteModal() {
+  const modal = document.getElementById('createNoteModal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function initNotesNotebookListeners() {
+  // Navigation Tabs
+  const tabShieldsBtn = document.getElementById('tabShieldsBtn');
+  const tabNotesBtn = document.getElementById('tabNotesBtn');
+
+  if (tabShieldsBtn) {
+    tabShieldsBtn.addEventListener('click', () => switchViewTab('shieldsView'));
+  }
+  if (tabNotesBtn) {
+    tabNotesBtn.addEventListener('click', () => switchViewTab('notesView'));
+  }
+
+  // Check URL hash for direct notebook opening
+  if (window.location.hash === '#notes') {
+    switchViewTab('notesView');
+  }
+
+  // Refresh Button
+  const refreshNotesBtn = document.getElementById('refreshNotesBtn');
+  if (refreshNotesBtn) {
+    refreshNotesBtn.addEventListener('click', () => {
+      loadVideoNotes();
+      showToast('Notes refreshed from database.');
+    });
+  }
+
+  // Search input
+  const searchInput = document.getElementById('notesSearchInput');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      notesSearchTerm = e.target.value.trim();
+      renderVideoNotesGrid();
+    });
+  }
+
+  // Open & Close Window Modal
+  const closeWindowBtn = document.getElementById('closeNotesWindowBtn');
+  if (closeWindowBtn) {
+    closeWindowBtn.addEventListener('click', closeNotesWindow);
+  }
+
+  const windowModal = document.getElementById('notesWindowModal');
+  if (windowModal) {
+    windowModal.addEventListener('click', (e) => {
+      if (e.target === windowModal) closeNotesWindow();
+    });
+  }
+
+  // Form inside Window to add note
+  const windowAddNoteForm = document.getElementById('windowAddNoteForm');
+  if (windowAddNoteForm) {
+    windowAddNoteForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!currentSelectedVideo) return;
+
+      const tsInput = document.getElementById('windowNoteTimestamp');
+      const contentInput = document.getElementById('windowNoteContent');
+      const ts = tsInput ? tsInput.value.trim() : '00:00';
+      const content = contentInput ? contentInput.value.trim() : '';
+
+      if (!content) return;
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            url: currentSelectedVideo.video_url,
+            timestamp: ts,
+            content: content,
+            title: currentSelectedVideo.video_title,
+          }),
+        });
+
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        const newNote = await res.json();
+
+        currentSelectedVideo.notes.push(newNote);
+        currentSelectedVideo.notes_count = currentSelectedVideo.notes.length;
+
+        if (contentInput) contentInput.value = '';
+        renderNotesWindowList();
+        renderVideoNotesGrid();
+        showToast('Note added to video.');
+      } catch (err) {
+        alert(`Failed to add note: ${err.message}`);
+      }
+    });
+  }
+
+  // Delete all notes for video inside window
+  const deleteAllBtn = document.getElementById('windowDeleteAllBtn');
+  if (deleteAllBtn) {
+    deleteAllBtn.addEventListener('click', async () => {
+      if (!currentSelectedVideo) return;
+      if (!confirm(`Are you sure you want to delete all notes for "${currentSelectedVideo.video_title}"?`)) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/api/v1/notes/video/${currentSelectedVideo.video_id}`, {
+          method: 'DELETE',
+          headers: { 'Accept': 'application/json' },
+        });
+
+        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+
+        videoNotesGroups = videoNotesGroups.filter((g) => g.video_id !== currentSelectedVideo.video_id);
+        closeNotesWindow();
+        renderVideoNotesGrid();
+        showToast('All notes for video deleted.');
+      } catch (err) {
+        alert(`Failed to delete notes: ${err.message}`);
+      }
+    });
+  }
+
+  // Global Create Note Modal handlers
+  const openNewNoteModalBtn = document.getElementById('openNewNoteModalBtn');
+  const emptyStateAddNoteBtn = document.getElementById('emptyStateAddNoteBtn');
+  const closeCreateNoteModalBtn = document.getElementById('closeCreateNoteModalBtn');
+  const cancelCreateNoteBtn = document.getElementById('cancelCreateNoteBtn');
+  const createNoteModal = document.getElementById('createNoteModal');
+  const createNoteGlobalForm = document.getElementById('createNoteGlobalForm');
+
+  if (openNewNoteModalBtn) openNewNoteModalBtn.addEventListener('click', openCreateNoteModal);
+  if (emptyStateAddNoteBtn) emptyStateAddNoteBtn.addEventListener('click', openCreateNoteModal);
+  if (closeCreateNoteModalBtn) closeCreateNoteModalBtn.addEventListener('click', closeCreateNoteModal);
+  if (cancelCreateNoteBtn) cancelCreateNoteBtn.addEventListener('click', closeCreateNoteModal);
+
+  if (createNoteModal) {
+    createNoteModal.addEventListener('click', (e) => {
+      if (e.target === createNoteModal) closeCreateNoteModal();
+    });
+  }
+
+  if (createNoteGlobalForm) {
+    createNoteGlobalForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const urlInput = document.getElementById('globalNoteUrl');
+      const tsInput = document.getElementById('globalNoteTimestamp');
+      const contentInput = document.getElementById('globalNoteContent');
+
+      const url = urlInput ? urlInput.value.trim() : '';
+      const ts = tsInput ? tsInput.value.trim() : '00:00';
+      const content = contentInput ? contentInput.value.trim() : '';
+
+      if (!url || !content) return;
+
+      try {
+        const submitBtn = document.getElementById('submitCreateNoteBtn');
+        if (submitBtn) {
+          submitBtn.disabled = true;
+          submitBtn.textContent = 'Saving & Fetching...';
+        }
+
+        const res = await fetch(`${API_BASE}/api/v1/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            url: url,
+            timestamp: ts,
+            content: content,
+          }),
+        });
+
+        if (submitBtn) {
+          submitBtn.disabled = false;
+          submitBtn.textContent = 'Save Note';
+        }
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `HTTP ${res.status}`);
+        }
+
+        const createdNote = await res.json();
+        closeCreateNoteModal();
+        createNoteGlobalForm.reset();
+        await loadVideoNotes();
+
+        // Automatically open the video's notes window
+        const targetGroup = videoNotesGroups.find((g) => g.video_id === createdNote.video_id);
+        if (targetGroup) {
+          openNotesWindow(targetGroup);
+        }
+        showToast('Timestamped note saved successfully!');
+      } catch (err) {
+        alert(`Failed to save note: ${err.message}`);
+      }
+    });
+  }
+
+  // Escape key closes modals
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      closeNotesWindow();
+      closeCreateNoteModal();
+    }
+  });
+}
+
 // Startup
 document.addEventListener('DOMContentLoaded', () => {
   initEventListeners();
+  initNotesNotebookListeners();
   initDirectExtensionBridge();
   loadSettings();
+  loadVideoNotes();
   checkBackendHealth();
   setInterval(checkBackendHealth, 5000);
 });
+

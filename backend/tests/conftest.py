@@ -39,6 +39,12 @@ class CustomTestClient:
     def post(self, url: str, **kwargs):
         return self.request("POST", url, **kwargs)
 
+    def delete(self, url: str, **kwargs):
+        return self.request("DELETE", url, **kwargs)
+
+    def put(self, url: str, **kwargs):
+        return self.request("PUT", url, **kwargs)
+
     def options(self, url: str, **kwargs):
         return self.request("OPTIONS", url, **kwargs)
 
@@ -49,14 +55,21 @@ fastapi.testclient.TestClient = CustomTestClient
 
 
 from app.services.cache import get_sqlite_cache
+from app.services.notes_service import notes_service
 
 
 @pytest.fixture(autouse=True)
 def reset_classifier_state():
-    """Reset the classifier singleton and SQLite cache state before each test to guarantee test isolation."""
+    """Reset the classifier singleton, SQLite cache, and notes state before each test to guarantee test isolation."""
     set_classifier(PlaceholderClassifier())
     cache = get_sqlite_cache()
     cache.clear()
+    with notes_service._lock:
+        with notes_service._connection() as conn:
+            conn.execute("DELETE FROM notes")
     yield
     cache.clear()
+    with notes_service._lock:
+        with notes_service._connection() as conn:
+            conn.execute("DELETE FROM notes")
     set_classifier(None)

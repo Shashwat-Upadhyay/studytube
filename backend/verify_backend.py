@@ -26,6 +26,7 @@ class TestClient:
 
     def get(self, url: str, **kwargs): return self.request("GET", url, **kwargs)
     def post(self, url: str, **kwargs): return self.request("POST", url, **kwargs)
+    def delete(self, url: str, **kwargs): return self.request("DELETE", url, **kwargs)
     def options(self, url: str, **kwargs): return self.request("OPTIONS", url, **kwargs)
 
 def verify():
@@ -79,6 +80,33 @@ def verify():
     )
     assert resp.status_code == 200, f"CORS preflight failed: {resp.status_code}"
     print("   CORS preflight allowed origin:", resp.headers.get("access-control-allow-origin"))
+
+    # 6. Test Notes API (Create, List, Group, and Delete)
+    print("\n6. Testing Notes API (create, list, group, delete)...")
+    create_resp = client.post(
+        "/api/v1/notes",
+        json={
+            "url": "https://www.youtube.com/watch?v=verifyVid1",
+            "timestamp": "01:45",
+            "content": "Verification note at 1m45s",
+            "title": "StudyTube Verification Lecture",
+        },
+    )
+    assert create_resp.status_code == 201, f"Create note failed: {create_resp.status_code}"
+    note_id = create_resp.json()["id"]
+    print("   Created Note ID:", note_id)
+
+    list_resp = client.get("/api/v1/notes", params={"video_id": "verifyVid1"})
+    assert list_resp.status_code == 200 and len(list_resp.json()) >= 1, "List notes failed"
+    print("   Retrieved notes for video count:", len(list_resp.json()))
+
+    group_resp = client.get("/api/v1/notes/videos")
+    assert group_resp.status_code == 200, "Group notes failed"
+    print("   Retrieved video groups count:", len(group_resp.json()))
+
+    del_resp = client.delete(f"/api/v1/notes/{note_id}")
+    assert del_resp.status_code == 200 and del_resp.json()["success"] is True, "Delete note failed"
+    print("   Deleted Note ID:", note_id)
 
     print("\n[SUCCESS] ALL VERIFICATION CHECKS PASSED!")
 

@@ -63,10 +63,32 @@
         </button>
       </div>
     </div>
+
+    <!-- Top Navigation Tabs -->
+    <div class="nav-tabs-wrapper">
+      <nav class="nav-tabs-container">
+        <button type="button" class="tab-btn active" id="tabShieldsBtn" data-target="shieldsView">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          </svg>
+          <span>Focus &amp; Distraction Shields</span>
+        </button>
+        <button type="button" class="tab-btn" id="tabNotesBtn" data-target="notesView">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 20h9"></path>
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+          </svg>
+          <span>Video Notes Notebook</span>
+          <span class="tab-counter-badge" id="globalNotesCountBadge">0</span>
+        </button>
+      </nav>
+    </div>
   </header>
 
   <!-- Main Content Container -->
   <main class="main-layout">
+    <!-- View Panel 1: Distraction Shields -->
+    <div id="shieldsView" class="view-panel active">
     <!-- Master Switch Hero Card -->
     <section class="card hero-master-card" id="masterHeroCard">
       <div class="hero-master-content">
@@ -343,7 +365,195 @@
         </div>
       </div>
     </section>
+    </div>
+    <!-- End View Panel 1 (shieldsView) -->
+
+    <!-- View Panel 2: Video Notes Notebook -->
+    <div id="notesView" class="view-panel hidden">
+      <!-- Notes Hero Block -->
+      <section class="card notes-hero-card">
+        <div class="notes-hero-content">
+          <div class="hero-badge">Video Notebook</div>
+          <h2 class="notes-hero-title">Video-Wise Study Notes</h2>
+          <p class="notes-hero-desc">
+            Take and browse timestamped notes recorded across YouTube videos. Click any video card below to open its dedicated Notes Window, jump to exact timestamps on YouTube, or delete notes.
+          </p>
+          <div class="notes-stats-row">
+            <div class="notes-stat-pill">
+              <span class="stat-number" id="statTotalVideos">0</span>
+              <span class="stat-label">Videos with Notes</span>
+            </div>
+            <div class="notes-stat-pill">
+              <span class="stat-number" id="statTotalNotes">0</span>
+              <span class="stat-label">Total Timestamp Notes</span>
+            </div>
+          </div>
+        </div>
+        <div class="notes-hero-actions">
+          <button type="button" class="btn btn-primary" id="openNewNoteModalBtn">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Take New Note
+          </button>
+          <button type="button" class="btn btn-secondary" id="refreshNotesBtn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            Refresh Notes
+          </button>
+        </div>
+      </section>
+
+      <!-- Search & Filters Toolbar -->
+      <section class="section-block">
+        <div class="notes-toolbar-card">
+          <div class="notes-search-wrapper">
+            <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input
+              type="text"
+              id="notesSearchInput"
+              class="notes-search-input"
+              placeholder="Search by video title, URL, or note keywords..."
+            >
+          </div>
+        </div>
+
+        <!-- Video Wise Cards Grid -->
+        <div class="video-notes-grid" id="videoNotesGrid">
+          <!-- Rendered dynamically by app.js -->
+        </div>
+
+        <!-- Empty State -->
+        <div class="notes-empty-state hidden" id="videoNotesEmptyState">
+          <div class="empty-state-art">📝</div>
+          <h3 class="empty-state-title">No Video Notes Found</h3>
+          <p class="empty-state-desc">
+            You can take timestamped notes right beside any video while watching on YouTube, or click &ldquo;Take New Note&rdquo; above to paste a YouTube URL.
+          </p>
+          <button type="button" class="btn btn-primary btn-sm" id="emptyStateAddNoteBtn">
+            + Take Your First Note
+          </button>
+        </div>
+      </section>
+    </div>
+    <!-- End View Panel 2 (notesView) -->
   </main>
+
+  <!-- Video Notes Window Modal (Slide-in / Dialog) -->
+  <div class="modal-backdrop hidden" id="notesWindowModal">
+    <div class="notes-window-card" role="dialog" aria-modal="true" aria-labelledby="notesWindowTitle">
+      <!-- Window Header -->
+      <div class="notes-window-header">
+        <div class="window-video-meta">
+          <img class="window-video-thumb" id="windowVideoThumb" src="" alt="Video thumbnail">
+          <div class="window-video-text">
+            <h3 class="window-video-title" id="notesWindowTitle">Video Title</h3>
+            <div class="window-video-sub">
+              <span class="window-notes-badge" id="windowNotesCountBadge">0 Notes</span>
+              <a href="#" target="_blank" class="window-yt-link" id="windowYtLink">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
+                  <polyline points="15 3 21 3 21 9"></polyline>
+                  <line x1="10" y1="14" x2="21" y2="3"></line>
+                </svg>
+                Watch on YouTube
+              </a>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="modal-close-btn" id="closeNotesWindowBtn" title="Close Window (Esc)">
+          &times;
+        </button>
+      </div>
+
+      <!-- Quick Add Note Form inside Window -->
+      <div class="window-add-note-box">
+        <h4 class="window-box-title">Add Note to this Video</h4>
+        <form id="windowAddNoteForm" class="window-note-form">
+          <div class="window-form-row">
+            <div class="ts-input-group">
+              <span class="ts-prefix">⏱️</span>
+              <input type="text" id="windowNoteTimestamp" class="window-ts-input" placeholder="01:23" title="Timestamp (e.g. 01:23 or seconds)" required>
+            </div>
+            <input type="text" id="windowNoteContent" class="window-content-input" placeholder="Write note for this timestamp..." required>
+            <button type="submit" class="btn btn-primary btn-sm" id="windowNoteSubmitBtn">Save Note</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Notes Items List -->
+      <div class="notes-window-body">
+        <div class="window-notes-list" id="windowNotesList">
+          <!-- Populated by app.js -->
+        </div>
+      </div>
+
+      <!-- Window Footer -->
+      <div class="notes-window-footer">
+        <button type="button" class="btn btn-secondary btn-sm" id="windowOpenYtDirectBtn">
+          Open Video on YouTube
+        </button>
+        <button type="button" class="btn btn-danger btn-sm" id="windowDeleteAllBtn">
+          Delete All Notes for this Video
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create New Note Modal (Global from scratch) -->
+  <div class="modal-backdrop hidden" id="createNoteModal">
+    <div class="modal-card" role="dialog" aria-modal="true">
+      <div class="modal-header">
+        <h3 class="modal-title">Take New Timestamped Note</h3>
+        <button type="button" class="modal-close-btn" id="closeCreateNoteModalBtn">&times;</button>
+      </div>
+      <form id="createNoteGlobalForm" class="modal-form">
+        <div class="form-group">
+          <label for="globalNoteUrl" class="form-label">YouTube Video URL or Video ID</label>
+          <input
+            type="text"
+            id="globalNoteUrl"
+            class="form-input"
+            placeholder="e.g. https://www.youtube.com/watch?v=kqtD5dpn9C8 or kqtD5dpn9C8"
+            required
+          >
+          <span class="form-hint">Title and thumbnail will be automatically retrieved by StudyTube.</span>
+        </div>
+
+        <div class="form-group">
+          <label for="globalNoteTimestamp" class="form-label">Video Timestamp</label>
+          <input
+            type="text"
+            id="globalNoteTimestamp"
+            class="form-input"
+            placeholder="e.g. 01:25 or 1:05:30 or seconds like 85"
+            required
+          >
+        </div>
+
+        <div class="form-group">
+          <label for="globalNoteContent" class="form-label">Note Text</label>
+          <textarea
+            id="globalNoteContent"
+            class="form-textarea"
+            rows="3"
+            placeholder="Type your notes, formulas, summary, or thoughts at this video timestamp..."
+            required
+          ></textarea>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" id="cancelCreateNoteBtn">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="submitCreateNoteBtn">Save Note</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- Sticky Bottom Toast Notification -->
   <div class="toast-notification hidden" id="toastNotification">

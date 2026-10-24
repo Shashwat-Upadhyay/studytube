@@ -199,6 +199,93 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ success: true, message: 'Classification cache cleared.' });
     return true;
   }
+
+  // --- Notes Taking Message Handlers ---
+  if (message.type === 'SAVE_NOTE') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['backendUrl']);
+        const backendUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
+        const res = await fetch(`${backendUrl}/api/v1/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(message.payload || {}),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.detail || `HTTP ${res.status}`);
+        }
+        const note = await res.json();
+        sendResponse({ success: true, note });
+      } catch (err) {
+        console.error('[StudyTube Background] Failed to save note:', err);
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'GET_VIDEO_NOTES') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['backendUrl']);
+        const backendUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
+        const vid = encodeURIComponent(message.videoId || message.video_id || '');
+        const res = await fetch(`${backendUrl}/api/v1/notes?video_id=${vid}`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const notes = await res.json();
+        sendResponse({ success: true, notes });
+      } catch (err) {
+        console.error('[StudyTube Background] Failed to fetch video notes:', err);
+        sendResponse({ success: false, error: err.message, notes: [] });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'GET_ALL_NOTES_GROUPED') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['backendUrl']);
+        const backendUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
+        const res = await fetch(`${backendUrl}/api/v1/notes/videos`, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const videos = await res.json();
+        sendResponse({ success: true, videos });
+      } catch (err) {
+        console.error('[StudyTube Background] Failed to fetch grouped notes:', err);
+        sendResponse({ success: false, error: err.message, videos: [] });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'DELETE_NOTE') {
+    (async () => {
+      try {
+        const storage = await chrome.storage.local.get(['backendUrl']);
+        const backendUrl = (storage.backendUrl || DEFAULT_BACKEND_URL).replace(/\/+$/, '');
+        const noteId = message.id || message.note_id;
+        const res = await fetch(`${backendUrl}/api/v1/notes/${noteId}`, {
+          method: 'DELETE',
+          headers: { 'Accept': 'application/json' },
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        sendResponse({ success: true, data });
+      } catch (err) {
+        console.error('[StudyTube Background] Failed to delete note:', err);
+        sendResponse({ success: false, error: err.message });
+      }
+    })();
+    return true;
+  }
 });
 
 /**
