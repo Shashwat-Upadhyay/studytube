@@ -1,15 +1,26 @@
 # Environment & Secrets
 .env
+.env.*
 *.env
+*.env.*
 !.env.example
+!backend/.env.example
+*.pem
+*.key
+*.cert
+*.crt
+credentials.json
+secrets.json
 
-# SQLite Databases & Cache
+# SQLite Databases, Local Data & Cache
 *.db
 *.db-wal
 *.db-shm
 *.sqlite
 *.sqlite3
+data/
 backend/data/
+
 
 # Python
 __pycache__/

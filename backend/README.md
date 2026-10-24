@@ -1,6 +1,13 @@
 # StudyTube Backend API Reference
 
-FastAPI backend service providing intelligent content classification and focus recommendations for the StudyTube Chrome extension.
+FastAPI backend microservice providing intelligent video classification, SQLite persistent caching, and timestamped study notes management for the StudyTube Chrome extension and Web Dashboard.
+
+---
+
+## 📑 Quick Links
+- **[Complete Setup Guide (SETUP.md)](../SETUP.md)**
+- **[System Architecture (ARCHITECTURE.md)](../ARCHITECTURE.md)**
+- **[Root Repository README (README.md)](../README.md)**
 
 ---
 
@@ -12,6 +19,14 @@ FastAPI backend service providing intelligent content classification and focus r
   - **Google Gemini:** Direct integration with Gemini models (`gemini-1.5-flash`, `gemini-1.5-pro`, `gemini-2.0-flash`) using Google Generative Language REST API.
   - **OpenAI / Compatible:** Supports `gpt-4o-mini`, `gpt-4o`, and local OpenAI-compatible endpoints (vLLM, Groq).
   - **Offline / Placeholder:** Fast rule-based mock classifier for local development without credentials.
+- **SQLite Classification Cache (1GB Capacity & LFU Eviction):**
+  - Persistent SQLite storage (`data/classification_cache.db`) indexing canonical YouTube URLs.
+  - View-weighted LFU (Least Frequently Used) eviction policy discarding lowest-viewed videos when disk usage reaches the 1GB threshold.
+  - PRAGMA WAL mode and thread-safe connection pooling for zero-lag concurrent reads.
+- **Timestamped Video Notes Service:**
+  - Full CRUD API managing video notes (`data/notes.db`).
+  - Automatic title and thumbnail resolution via YouTube's public oEmbed API (no YouTube API keys required).
+  - Video-grouped aggregation and Markdown notebook export.
 - **Resilient Fallback Policy:**
   - If the LLM call fails, times out, or returns invalid schema, selects a random category from defined categories (strictly excluding `unknown`).
   - Sets `is_fallback: true` and a low confidence score (`0.1`).
@@ -36,7 +51,7 @@ PORT=8000
 HOST="127.0.0.1"
 
 # CORS Configuration
-CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000,https://www.youtube.com"
+CORS_ORIGINS="http://localhost:3000,http://127.0.0.1:3000,http://localhost:8000,http://127.0.0.1:8000,https://www.youtube.com,https://youtube.com"
 CORS_ALLOW_EXTENSION_REGEX=true
 
 # LLM Classifier Configuration
@@ -47,7 +62,7 @@ LLM_PROVIDER="ollama"
 LLM_MODEL="llama3.2:3b"
 LLM_BASE_URL="http://localhost:11434/v1"
 
-# Option B: Offline / Placeholder
+# Option B: Offline / Placeholder (Zero Setup)
 # LLM_PROVIDER="placeholder"
 
 # Option C: Google Gemini
@@ -55,13 +70,18 @@ LLM_BASE_URL="http://localhost:11434/v1"
 # LLM_API_KEY="AIzaSy..."
 # LLM_MODEL="gemini-1.5-flash"
 
-# Option D: OpenAI
+# Option D: OpenAI / Compatible
 # LLM_PROVIDER="openai"
 # LLM_API_KEY="sk-..."
 # LLM_MODEL="gpt-4o-mini"
 
 LLM_TIMEOUT_SECONDS=15.0
 CACHE_SIZE=1000
+
+# SQLite Databases
+SQLITE_CACHE_DB_PATH="data/classification_cache.db"
+SQLITE_CACHE_MAX_BYTES=1073741824
+SQLITE_NOTES_DB_PATH="data/notes.db"
 ```
 
 ---
@@ -74,8 +94,9 @@ Returns API operational status:
 {
   "status": "healthy",
   "version": "0.2.0",
-  "timestamp": "2026-10-22T10:07:53.160349Z",
-  "environment": "development"
+  "environment": "development",
+  "llm_provider": "ollama",
+  "llm_model": "llama3.2:3b"
 }
 ```
 
@@ -87,7 +108,8 @@ Returns API operational status:
   "video_id": "dQw4w9WgXcQ",
   "title": "Never Gonna Give You Up",
   "channel_name": "Rick Astley",
-  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
+  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+  "views": 1500000000
 }
 ```
 
@@ -103,7 +125,25 @@ Returns API operational status:
 }
 ```
 
-### 3. Settings Synchronization (`GET /api/v1/settings` & `POST /api/v1/settings`)
+### 3. Video Timestamped Notes API (`/api/v1/notes`)
+
+- **`POST /api/v1/notes`**: Create a timestamped note. Automatically resolves title and thumbnail via YouTube oEmbed.
+  ```json
+  // Request
+  {
+    "video_id": "kqtD5dpn9C8",
+    "timestamp_seconds": 85,
+    "timestamp_formatted": "01:25",
+    "note_text": "Important definition of algorithm time complexity."
+  }
+  ```
+- **`GET /api/v1/notes`**: List all notes, optionally filtered with `?video_id=...`.
+- **`GET /api/v1/notes/videos`**: Group all notes by video for the frontend Notebook cards.
+- **`GET /api/v1/notes/{id}`**: Retrieve a single note by ID.
+- **`DELETE /api/v1/notes/{id}`**: Delete a single note.
+- **`DELETE /api/v1/notes/video/{video_id}`**: Delete all notes for a specific video.
+
+### 4. Settings Synchronization (`GET /api/v1/settings` & `POST /api/v1/settings`)
 Synchronizes settings between dashboard and backend storage (`backend/app/settings.json`).
 
 ---
@@ -120,8 +160,8 @@ Interactive OpenAPI Swagger UI is available at `http://127.0.0.1:8000/docs`.
 
 ## Running Tests
 
-Execute the 34 automated pytest tests:
+Execute the 46 automated unit and integration tests:
 
 ```powershell
-python -m pytest backend/tests -v
+pytest backend/tests -v
 ```
